@@ -95,7 +95,10 @@ func (c *httpClient) get(ctx context.Context, path string, params url.Values, ou
 		return fmt.Errorf("loki request failed: %w", err)
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("loki: read response body %s: %w", path, err)
+	}
 
 	var ar apiResponse
 	if err := json.Unmarshal(body, &ar); err != nil {
