@@ -1,6 +1,7 @@
 package web
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -80,7 +81,8 @@ func (h *Handler) queryRange(c *gin.Context) {
 	}
 	res, err := h.Loki.QueryRange(c.Request.Context(), query, start, end, limit, direction)
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Loki: " + err.Error()})
+		status, body := lokiStatusAndBody(err)
+		c.JSON(status, gin.H{"error": body})
 		return
 	}
 	for i := range res.Lines {
@@ -109,8 +111,22 @@ func parseRange(c *gin.Context) (time.Time, time.Time, bool) {
 // respondData 统一处理 labels/values 的成功/失败响应。
 func respondData(c *gin.Context, data interface{}, err error) {
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": "Loki: " + err.Error()})
+		status, body := lokiStatusAndBody(err)
+		c.JSON(status, gin.H{"error": body})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": data})
+}
+
+// lokiStatusAndBody maps Loki errors to appropriate HTTP status codes and response bodies.
+func lokiStatusAndBody(err error) (int, string) {
+	var httpErr *loki.HTTPError
+	if errors.As(err, &httpErr) {
+		// 4xx from Loki → same 4xx to client; 5xx → 502
+		if httpErr.StatusCode >= 400 && httpErr.StatusCode < 500 {
+			return httpErr.StatusCode, "Loki: " + httpErr.Message
+		}
+	}
+	// Network/timeout or other errors → 502
+	return http.StatusBadGateway, "Loki: " + err.Error()
 }

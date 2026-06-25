@@ -1,8 +1,10 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -88,5 +90,75 @@ loki:
 	}
 	if c.Loki.DefaultLimit != 1000 {
 		t.Errorf("limit default = %d", c.Loki.DefaultLimit)
+	}
+}
+
+func TestLoad_URL_MalformedFails(t *testing.T) {
+	tests := []struct {
+		name     string
+		url      string
+		wantErr  bool
+		errMsg   string
+	}{
+		{
+			name:    "valid https URL",
+			url:     "https://loki.example:3100",
+			wantErr: false,
+		},
+		{
+			name:    "valid http URL",
+			url:     "http://loki.example:3100",
+			wantErr: false,
+		},
+		{
+			name:    "malformed - not a URL",
+			url:     "not-a-url",
+			wantErr: true,
+			errMsg:  "loki.url invalid",
+		},
+		{
+			name:    "wrong scheme - gopher",
+			url:     "gopher://loki.example",
+			wantErr: true,
+			errMsg:  "loki.url invalid",
+		},
+		{
+			name:    "wrong scheme - ftp",
+			url:     "ftp://loki.example",
+			wantErr: true,
+			errMsg:  "loki.url invalid",
+		},
+		{
+			name:    "missing host",
+			url:     "http://",
+			wantErr: true,
+			errMsg:  "loki.url invalid",
+		},
+		{
+			name:    "missing scheme",
+			url:     "loki.example:3100",
+			wantErr: true,
+			errMsg:  "loki.url invalid",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := writeTempYAML(t, fmt.Sprintf(`
+loki:
+  url: %q
+`, tt.url))
+			_, err := Load(p)
+			if tt.wantErr && err == nil {
+				t.Fatalf("expected error containing %q, got nil", tt.errMsg)
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if tt.wantErr && err != nil {
+				if !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("error should contain %q, got %q", tt.errMsg, err.Error())
+				}
+			}
+		})
 	}
 }

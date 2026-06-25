@@ -1,0 +1,8 @@
+# local config (copy from config.example.yaml and fill in your Loki URL)
+config.yaml
+
+# build output
+bin/
+
+# SDD scratch
+.superpowers/

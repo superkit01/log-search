@@ -12,6 +12,16 @@ import (
 	"time"
 )
 
+// HTTPError is returned when Loki responds with a non-success HTTP status.
+type HTTPError struct {
+	StatusCode int
+	Message    string
+}
+
+func (e *HTTPError) Error() string {
+	return fmt.Sprintf("loki: HTTP %d: %s", e.StatusCode, e.Message)
+}
+
 // Client 抽象 Loki 查询能力,便于测试注入 mock。
 type Client interface {
 	Labels(ctx context.Context, start, end time.Time) ([]string, error)
@@ -104,11 +114,15 @@ func (c *httpClient) get(ctx context.Context, path string, params url.Values, ou
 	if err := json.Unmarshal(body, &ar); err != nil {
 		return fmt.Errorf("loki: decode %s: %w (body=%q)", path, err, string(body))
 	}
-	if ar.Status != "success" {
-		return fmt.Errorf("loki: %s: %s", ar.ErrorType, ar.ErrorMsg)
-	}
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("loki: HTTP %d: %s", resp.StatusCode, ar.ErrorMsg)
+	if ar.Status != "success" || resp.StatusCode >= 400 {
+		msg := ar.ErrorMsg
+		if msg == "" {
+			msg = string(body)
+		}
+		if ar.ErrorType != "" {
+			msg = ar.ErrorType + ": " + msg
+		}
+		return &HTTPError{StatusCode: resp.StatusCode, Message: msg}
 	}
 	if out != nil {
 		if err := json.Unmarshal(ar.Data, out); err != nil {

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"time"
 
@@ -46,6 +47,17 @@ func Load(path string) (*Config, error) {
 func (c *Config) validate() error {
 	if c.Loki.URL == "" {
 		return fmt.Errorf("loki.url is required")
+	}
+	// Validate URL scheme and host
+	u, err := url.Parse(c.Loki.URL)
+	if err != nil {
+		return fmt.Errorf("loki.url invalid %q: must be http(s)://host", c.Loki.URL)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("loki.url invalid %q: must be http(s)://host", c.Loki.URL)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("loki.url invalid %q: must be http(s)://host", c.Loki.URL)
 	}
 	if c.Loki.Timeout == "" {
 		c.Loki.Timeout = "30s"

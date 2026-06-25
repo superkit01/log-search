@@ -2,6 +2,7 @@ package loki
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -90,5 +91,26 @@ func TestQueryRange_LokiError(t *testing.T) {
 	_, err := c.QueryRange(context.Background(), `{`, time.Unix(0, 0), time.Unix(0, 0).Add(time.Hour), 100, Backward)
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestQueryRange_ReturnsHTTPError(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, `{"status":"error","errorType":"bad_data","error":"parse error at col 1"}`)
+	})
+	_, err := c.QueryRange(context.Background(), `{`, time.Unix(0, 0), time.Unix(0, 0).Add(time.Hour), 100, Backward)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var httpErr *HTTPError
+	if !errors.As(err, &httpErr) {
+		t.Fatalf("expected *HTTPError, got %T: %v", err, err)
+	}
+	if httpErr.StatusCode != http.StatusBadRequest {
+		t.Errorf("StatusCode = %d, want 400", httpErr.StatusCode)
+	}
+	if !errors.Is(err, httpErr) {
+		t.Errorf("errors.As should succeed, got %v", err)
 	}
 }

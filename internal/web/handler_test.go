@@ -104,6 +104,39 @@ func TestQueryRange_LokiError_502(t *testing.T) {
 	}
 }
 
+func TestQueryRange_LokiHTTPError_400(t *testing.T) {
+	m := &mockLoki{err: &loki.HTTPError{StatusCode: http.StatusBadRequest, Message: "parse error"}}
+	r := setupRouter(m)
+	req := httptest.NewRequest(http.MethodGet, "/api/query_range?query=x&start=1&end=99999", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "Loki") {
+		t.Errorf("body should mention Loki: %s", w.Body.String())
+	}
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["error"] == nil {
+		t.Errorf("response should have error field, got %v", resp)
+	}
+}
+
+func TestQueryRange_LokiHTTPError_502(t *testing.T) {
+	// 5xx errors from Loki should still return 502
+	m := &mockLoki{err: &loki.HTTPError{StatusCode: http.StatusServiceUnavailable, Message: "Loki overloaded"}}
+	r := setupRouter(m)
+	req := httptest.NewRequest(http.MethodGet, "/api/query_range?query=x&start=1&end=99999", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want 502", w.Code)
+	}
+}
+
 func TestLabels_OK(t *testing.T) {
 	m := &mockLoki{labels: []string{"app", "env"}}
 	r := setupRouter(m)
