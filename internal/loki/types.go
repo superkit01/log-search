@@ -40,3 +40,10 @@ type stream struct {
 	Stream map[string]string `json:"stream"`
 	Values [][2]string       `json:"values"` // [unixNanoString, line]
 }
+
+// queryRangeResponse 对应 Loki /query_range 的 data 字段:流数组在 result 里,
+// 而不是 data 本身(labels / label values 接口的 data 才是裸数组)。
+type queryRangeResponse struct {
+	ResultType string   `json:"resultType"`
+	Result     []stream `json:"result"`
+}

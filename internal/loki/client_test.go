@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -27,10 +28,13 @@ func TestQueryRange_ParsesStreams(t *testing.T) {
 		}
 		fmt.Fprint(w, `{
 		  "status":"success",
-		  "data":[{
-		    "stream":{"app":"nginx"},
-		    "values":[["1609459200000000000","level=info started"],["1609459201000000000","level=error boom"]]
-		  }]
+		  "data":{
+		    "resultType":"streams",
+		    "result":[{
+		      "stream":{"app":"nginx"},
+		      "values":[["1609459200000000000","level=info started"],["1609459201000000000","level=error boom"]]
+		    }]
+		  }
 		}`)
 	})
 	res, err := c.QueryRange(context.Background(), `{app="nginx"}`, time.Unix(0, 0), time.Unix(0, 0).Add(time.Hour), 100, Backward)
@@ -40,7 +44,8 @@ func TestQueryRange_ParsesStreams(t *testing.T) {
 	if res.Total != 2 {
 		t.Fatalf("total = %d want 2", res.Total)
 	}
-	if res.Lines[0].Raw != "level=info started" {
+	// direction=Backward → newest first, so line0 is the later "error" line.
+	if res.Lines[0].Raw != "level=error boom" {
 		t.Errorf("line0 raw = %q", res.Lines[0].Raw)
 	}
 	if res.Lines[0].Labels["app"] != "nginx" {
@@ -48,6 +53,53 @@ func TestQueryRange_ParsesStreams(t *testing.T) {
 	}
 	if res.Lines[0].Level != "" {
 		t.Errorf("client must not set level, got %q", res.Lines[0].Level)
+	}
+}
+
+// TestQueryRange_SortsAcrossStreams verifies the global time merge: Loki returns
+// lines grouped per stream, but the client must flatten them into a single
+// chronologically-ordered list. FORWARD = oldest first, BACKWARD = newest first.
+func TestQueryRange_SortsAcrossStreams(t *testing.T) {
+	body := `{
+	  "status":"success",
+	  "data":{
+	    "resultType":"streams",
+	    "result":[
+	      {"stream":{"app":"a"},"values":[["100","line-100"],["300","line-300"]]},
+	      {"stream":{"app":"b"},"values":[["200","line-200"],["400","line-400"]]}
+	    ]
+	  }
+	}`
+	for _, tc := range []struct {
+		name string
+		dir  Direction
+		want []string
+	}{
+		{"forward_ascending", Forward, []string{"line-100", "line-200", "line-300", "line-400"}},
+		{"backward_descending", Backward, []string{"line-400", "line-300", "line-200", "line-100"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+				fmt.Fprint(w, body)
+			})
+			res, err := c.QueryRange(context.Background(), `{app="a"}`, time.Unix(0, 0), time.Unix(0, 0).Add(time.Hour), 100, tc.dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.Total != 4 {
+				t.Fatalf("total = %d want 4", res.Total)
+			}
+			for i, want := range tc.want {
+				if res.Lines[i].Raw != want {
+					var got []string
+					for _, l := range res.Lines {
+						got = append(got, l.Raw)
+					}
+					t.Errorf("dir=%s order = %v, want %v", tc.dir, got, tc.want)
+					break
+				}
+			}
+		})
 	}
 }
 
@@ -91,6 +143,33 @@ func TestQueryRange_LokiError(t *testing.T) {
 	_, err := c.QueryRange(context.Background(), `{`, time.Unix(0, 0), time.Unix(0, 0).Add(time.Hour), 100, Backward)
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+// TestQueryRange_PlainTextError reproduces the real-world bug: Loki answers a
+// malformed LogQL query with HTTP 400 and a PLAIN-TEXT body
+// ("parse error at line 1, col 2: ..."), NOT JSON. The client must surface a
+// *HTTPError carrying the status code and body, not a json decode error —
+// otherwise the web layer cannot map it to a 400 and falls back to 502.
+func TestQueryRange_PlainTextError(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "parse error at line 1, col 2: syntax error: unexpected IDENTIFIER")
+	})
+	_, err := c.QueryRange(context.Background(), `{app="nginx"}`, time.Unix(0, 0), time.Unix(0, 0).Add(time.Hour), 100, Backward)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	var httpErr *HTTPError
+	if !errors.As(err, &httpErr) {
+		t.Fatalf("expected *HTTPError so the web layer can map to 4xx, got %T: %v", err, err)
+	}
+	if httpErr.StatusCode != http.StatusBadRequest {
+		t.Errorf("StatusCode = %d, want 400", httpErr.StatusCode)
+	}
+	if !strings.Contains(httpErr.Message, "parse error at line 1, col 2") {
+		t.Errorf("Message = %q, want it to contain Loki's parse error text", httpErr.Message)
 	}
 }
 
