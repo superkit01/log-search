@@ -80,6 +80,16 @@ func TestQueryRange_BadLimit(t *testing.T) {
 	}
 }
 
+func TestQueryRange_BadRange(t *testing.T) {
+	r := setupRouter(&mockLoki{})
+	req := httptest.NewRequest(http.MethodGet, "/api/query_range?query=x&start=999&end=999", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", w.Code)
+	}
+}
+
 func TestQueryRange_LokiError_502(t *testing.T) {
 	m := &mockLoki{err: context.DeadlineExceeded}
 	r := setupRouter(m)
