@@ -22,3 +22,8 @@ button:hover { background: #2d6cc4; }
 .lvl-warn .txt { color: #ffd166; }
 .lvl-debug .txt { color: #888; }
 .lvl-info .txt { color: #69c0ff; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 26px; align-items: center; }
+.chips:empty::before { content: "未添加标签条件"; color: #777; font-size: 12px; }
+.chip { background: #2c3a55; color: #cfe0ff; border: 1px solid #3a7bd5; border-radius: 12px; padding: 2px 4px 2px 10px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+.chip-x { cursor: pointer; color: #9ab; padding: 0 5px; border-radius: 8px; line-height: 1; }
+.chip-x:hover { color: #fff; background: #5a1d1d; }
