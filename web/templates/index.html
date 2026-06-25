@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>日志查询 - Log Search</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header><h1>日志查询</h1></header>
+  <main>
+    <section class="controls">
+      <div class="row">
+        <label>标签
+          <select id="label-select"><option value="">-- 选择标签 --</option></select>
+        </label>
+        <label>标签值
+          <select id="value-select" disabled><option value="">-- 先选标签 --</option></select>
+        </label>
+        <button type="button" id="add-label">加入查询</button>
+      </div>
+      <div class="row">
+        <label>关键词(追加 |= "keyword")<input type="text" id="keyword" placeholder="输入后回车"></label>
+      </div>
+      <div class="row">
+        <label>LogQL <input type="text" id="query" class="logql" placeholder='{app="nginx"}'></label>
+        <button type="button" id="search">查询</button>
+      </div>
+      <div class="row">
+        <span class="range-group">快捷:
+          <button type="button" data-mins="15">15m</button>
+          <button type="button" data-mins="60">1h</button>
+          <button type="button" data-mins="360">6h</button>
+          <button type="button" data-mins="1440">24h</button>
+        </span>
+        <label>起 <input type="datetime-local" id="start"></label>
+        <label>止 <input type="datetime-local" id="end"></label>
+        <label>方向
+          <select id="direction"><option value="BACKWARD">新→旧</option><option value="FORWARD">旧→新</option></select>
+        </label>
+        <label>条数 <input type="number" id="limit" value="{{.defaultLimit}}" min="1" max="5000"></label>
+      </div>
+    </section>
+
+    <section id="error-bar" class="error" hidden></section>
+    <section class="chart-wrap"><canvas id="chart" height="80"></canvas></section>
+    <section id="results" class="results"></section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

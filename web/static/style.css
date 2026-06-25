@@ -1,0 +1,24 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #1e1e1e; color: #ddd; }
+header { padding: 12px 20px; background: #111; border-bottom: 1px solid #333; }
+h1 { margin: 0; font-size: 18px; }
+main { padding: 16px 20px; }
+.controls .row { display: flex; gap: 12px; align-items: flex-end; margin-bottom: 10px; flex-wrap: wrap; }
+label { display: flex; flex-direction: column; font-size: 12px; gap: 4px; color: #aaa; }
+input, select { background: #2a2a2a; color: #ddd; border: 1px solid #444; padding: 6px 8px; border-radius: 4px; font-size: 13px; }
+.logql { min-width: 480px; }
+button { background: #3a7bd5; color: #fff; border: 0; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+button:hover { background: #2d6cc4; }
+.range-group { display: flex; align-items: center; gap: 4px; font-size: 12px; color: #aaa; }
+.range-group button { background: #333; padding: 6px 10px; }
+.error { background: #5a1d1d; color: #ffd6d6; padding: 10px 12px; border-radius: 4px; margin-bottom: 10px; }
+.chart-wrap { background: #262626; border-radius: 6px; padding: 10px; margin-bottom: 12px; }
+.meta { color: #9a8; font-size: 12px; margin-bottom: 8px; }
+.results { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; }
+.line { display: flex; gap: 10px; padding: 3px 6px; border-bottom: 1px solid #2a2a2a; }
+.line .ts { color: #888; flex: 0 0 200px; }
+.line .txt { white-space: pre-wrap; word-break: break-all; }
+.lvl-error .txt { color: #ff6b6b; }
+.lvl-warn .txt { color: #ffd166; }
+.lvl-debug .txt { color: #888; }
+.lvl-info .txt { color: #69c0ff; }

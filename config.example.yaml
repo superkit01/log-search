@@ -1,0 +1,6 @@
+server:
+  addr: ":8080"
+loki:
+  url: "http://localhost:3100"   # 用户的 Loki 地址,请改成实际地址
+  timeout: "30s"                 # HTTP 客户端超时
+  default_limit: 1000            # 查询默认条数
