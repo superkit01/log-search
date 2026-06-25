@@ -25,8 +25,10 @@ function showError(msg) { const b = $("error-bar"); b.textContent = msg; b.hidde
 function hideError() { $("error-bar").hidden = true; }
 
 async function loadLabels() {
+  const start = toUnix($("start").value);
+  const end = toUnix($("end").value);
   try {
-    const j = await api("/api/labels?start=1&end=" + unixNow());
+    const j = await api("/api/labels?start=" + start + "&end=" + end);
     const sel = $("label-select");
     (j.data || []).forEach((l) => {
       const o = document.createElement("option");
@@ -39,8 +41,10 @@ async function loadLabels() {
 $("label-select").addEventListener("change", async (e) => {
   const name = e.target.value;
   if (!name) return;
+  const start = toUnix($("start").value);
+  const end = toUnix($("end").value);
   try {
-    const j = await api("/api/label/" + encodeURIComponent(name) + "/values?start=1&end=" + unixNow());
+    const j = await api("/api/label/" + encodeURIComponent(name) + "/values?start=" + start + "&end=" + end);
     const sel = $("value-select");
     sel.disabled = false;
     sel.innerHTML = "";
@@ -71,13 +75,15 @@ $("keyword").addEventListener("change", () => {
   $("query").value = $("query").value + ' |= "' + kw + '"';
 });
 
+// setRange 把起止时间设为 [end - mins, end],供快捷按钮和页面默认值共用。
+function setRange(mins) {
+  const end = unixNow();
+  $("start").value = toLocalInput(end - mins * 60);
+  $("end").value = toLocalInput(end);
+}
+
 document.querySelectorAll(".range-group button").forEach((b) => {
-  b.addEventListener("click", () => {
-    const mins = parseInt(b.dataset.mins, 10);
-    const end = unixNow();
-    $("start").value = toLocalInput(end - mins * 60);
-    $("end").value = toLocalInput(end);
-  });
+  b.addEventListener("click", () => setRange(parseInt(b.dataset.mins, 10)));
 });
 
 $("search").addEventListener("click", search);
@@ -151,6 +157,7 @@ function renderChart(lines) {
     data: { labels, datasets },
     options: {
       responsive: true,
+      maintainAspectRatio: false,
       plugins: { legend: { labels: { color: "#ddd" } } },
       scales: {
         x: { stacked: true, ticks: { color: "#999" } },
@@ -160,4 +167,5 @@ function renderChart(lines) {
   });
 }
 
+setRange(60); // 默认最近 1 小时
 loadLabels();

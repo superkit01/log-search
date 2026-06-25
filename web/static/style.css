@@ -12,7 +12,7 @@ button:hover { background: #2d6cc4; }
 .range-group { display: flex; align-items: center; gap: 4px; font-size: 12px; color: #aaa; }
 .range-group button { background: #333; padding: 6px 10px; }
 .error { background: #5a1d1d; color: #ffd6d6; padding: 10px 12px; border-radius: 4px; margin-bottom: 10px; }
-.chart-wrap { background: #262626; border-radius: 6px; padding: 10px; margin-bottom: 12px; }
+.chart-wrap { background: #262626; border-radius: 6px; padding: 10px; margin-bottom: 12px; height: 160px; position: relative; }
 .meta { color: #9a8; font-size: 12px; margin-bottom: 8px; }
 .results { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; }
 .line { display: flex; gap: 10px; padding: 3px 6px; border-bottom: 1px solid #2a2a2a; }
