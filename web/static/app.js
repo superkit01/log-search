@@ -1,5 +1,6 @@
 const $ = (id) => document.getElementById(id);
 let chart;
+let chips = []; // 已选标签条件:[{label, value}],label 唯一
 
 function unixNow() { return Math.floor(Date.now() / 1000); }
 
@@ -56,24 +57,33 @@ $("label-select").addEventListener("change", async (e) => {
   } catch (err) { showError(err.message); }
 });
 
-$("add-label").addEventListener("click", () => {
-  const name = $("label-select").value;
-  const val = $("value-select").value;
-  if (!name || !val) { showError("请先选择标签和标签值"); return; }
-  const q = $("query");
-  const frag = name + '="' + val + '"';
-  if (/\{[^}]*\}/.test(q.value)) {
-    q.value = q.value.replace(/\{([^}]*)\}/, (m, inner) => "{" + (inner ? inner + ", " + frag : frag) + "}");
-  } else {
-    q.value = "{" + frag + "}";
-  }
+// 添加标签条件 chip:label 唯一,重复添加则替换值。
+$("add-chip").addEventListener("click", () => {
+  const label = $("label-select").value;
+  const value = $("value-select").value;
+  if (!label || !value) { showError("请先选择标签和标签值"); return; }
+  hideError();
+  const i = chips.findIndex((c) => c.label === label);
+  if (i >= 0) chips[i].value = value;
+  else chips.push({ label, value });
+  renderChips();
 });
 
-$("keyword").addEventListener("change", () => {
-  const kw = $("keyword").value.trim();
-  if (!kw) return;
-  $("query").value = $("query").value + ' |= "' + kw + '"';
-});
+function renderChips() {
+  const box = $("chips");
+  box.replaceChildren();
+  chips.forEach((c, i) => {
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.textContent = c.label + '="' + c.value + '"';
+    const x = document.createElement("span");
+    x.className = "chip-x";
+    x.textContent = "×";
+    x.addEventListener("click", () => { chips.splice(i, 1); renderChips(); });
+    chip.appendChild(x);
+    box.appendChild(chip);
+  });
+}
 
 // setRange 把起止时间设为 [end - mins, end],供快捷按钮和页面默认值共用。
 function setRange(mins) {
@@ -90,8 +100,10 @@ $("search").addEventListener("click", search);
 
 async function search() {
   hideError();
-  const query = $("query").value.trim();
-  if (!query) { showError("请输入 LogQL"); return; }
+  const keyword = $("keyword").value.trim();
+  const traceId = $("trace-id").value.trim();
+  const query = buildLogQL(chips, keyword, traceId);
+  if (!query) { showError("请先添加至少一个标签条件"); return; }
   const start = toUnix($("start").value);
   const end = toUnix($("end").value);
   if (!start || !end) { showError("请选择时间范围(可点快捷按钮)"); return; }
@@ -111,7 +123,7 @@ async function search() {
 function renderResults(res) {
   const box = $("results");
   const lines = res.lines || [];
-  box.innerHTML = "";
+  box.replaceChildren();
   const meta = document.createElement("div");
   meta.className = "meta";
   meta.textContent = "返回 " + lines.length + " 行(总计 " + res.total + ")";
