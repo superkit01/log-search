@@ -71,7 +71,7 @@ $("add-chip").addEventListener("click", () => {
 
 function renderChips() {
   const box = $("chips");
-  box.innerHTML = "";
+  box.replaceChildren();
   chips.forEach((c, i) => {
     const chip = document.createElement("span");
     chip.className = "chip";
