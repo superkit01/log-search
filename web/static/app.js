@@ -1,6 +1,6 @@
 const $ = (id) => document.getElementById(id);
 let chart;
-let chips = []; // 已选标签条件:[{label, value}],label 唯一
+const FILTERS_KEY = "log-search:filters"; // localStorage 键:存 {env, level}
 
 function unixNow() { return Math.floor(Date.now() / 1000); }
 
@@ -25,65 +25,48 @@ async function api(path) {
 function showError(msg) { const b = $("error-bar"); b.textContent = msg; b.hidden = false; }
 function hideError() { $("error-bar").hidden = true; }
 
-async function loadLabels() {
+// loadAppValues 用当前时间范围拉取 app 标签的值列表,填充应用下拉框(保留首个"不限")。
+async function loadAppValues() {
   const start = toUnix($("start").value);
   const end = toUnix($("end").value);
   try {
-    const j = await api("/api/labels?start=" + start + "&end=" + end);
-    const sel = $("label-select");
-    (j.data || []).forEach((l) => {
-      const o = document.createElement("option");
-      o.value = l; o.textContent = l;
-      sel.appendChild(o);
-    });
-  } catch (e) { showError(e.message); }
-}
-
-$("label-select").addEventListener("change", async (e) => {
-  const name = e.target.value;
-  if (!name) return;
-  const start = toUnix($("start").value);
-  const end = toUnix($("end").value);
-  try {
-    const j = await api("/api/label/" + encodeURIComponent(name) + "/values?start=" + start + "&end=" + end);
-    const sel = $("value-select");
-    sel.disabled = false;
-    sel.innerHTML = "";
+    const j = await api("/api/label/app/values?start=" + start + "&end=" + end);
+    const sel = $("app-select");
+    const blank = sel.querySelector('option[value=""]');
+    sel.replaceChildren(blank);
     (j.data || []).forEach((v) => {
       const o = document.createElement("option");
       o.value = v; o.textContent = v;
       sel.appendChild(o);
     });
-  } catch (err) { showError(err.message); }
-});
-
-// 添加标签条件 chip:label 唯一,重复添加则替换值。
-$("add-chip").addEventListener("click", () => {
-  const label = $("label-select").value;
-  const value = $("value-select").value;
-  if (!label || !value) { showError("请先选择标签和标签值"); return; }
-  hideError();
-  const i = chips.findIndex((c) => c.label === label);
-  if (i >= 0) chips[i].value = value;
-  else chips.push({ label, value });
-  renderChips();
-});
-
-function renderChips() {
-  const box = $("chips");
-  box.replaceChildren();
-  chips.forEach((c, i) => {
-    const chip = document.createElement("span");
-    chip.className = "chip";
-    chip.textContent = c.label + '="' + c.value + '"';
-    const x = document.createElement("span");
-    x.className = "chip-x";
-    x.textContent = "×";
-    x.addEventListener("click", () => { chips.splice(i, 1); renderChips(); });
-    chip.appendChild(x);
-    box.appendChild(chip);
-  });
+  } catch (e) { showError(e.message); }
 }
+
+// saveFilters 把当前 env、level 写入 localStorage;失败静默降级(隐私模式等)。
+function saveFilters() {
+  try {
+    const filters = { env: $("env-select").value, level: $("level-select").value };
+    localStorage.setItem(FILTERS_KEY, JSON.stringify(filters));
+  } catch (_) { /* localStorage 不可用时忽略,不阻塞查询 */ }
+}
+
+// loadFilters 从 localStorage 恢复 env、level;无记录或解析失败用默认值(env 不限、level=info)。
+function loadFilters() {
+  let env = "", level = "info";
+  try {
+    const raw = localStorage.getItem(FILTERS_KEY);
+    if (raw) {
+      const f = JSON.parse(raw);
+      if (f && typeof f.env === "string") env = f.env;
+      if (f && typeof f.level === "string") level = f.level;
+    }
+  } catch (_) { /* 解析失败用默认值 */ }
+  if (env) $("env-select").value = env;
+  $("level-select").value = level;
+}
+
+$("env-select").addEventListener("change", saveFilters);
+$("level-select").addEventListener("change", saveFilters);
 
 // setRange 把起止时间设为 [end - mins, end],供快捷按钮和页面默认值共用。
 function setRange(mins) {
@@ -100,10 +83,16 @@ $("search").addEventListener("click", search);
 
 async function search() {
   hideError();
+  const env = $("env-select").value;
+  const app = $("app-select").value;
+  const level = $("level-select").value;
+  const chips = [];
+  if (env) chips.push({ label: "env", value: env });
+  if (app) chips.push({ label: "app", value: app });
   const keyword = $("keyword").value.trim();
   const traceId = $("trace-id").value.trim();
-  const query = buildLogQL(chips, keyword, traceId);
-  if (!query) { showError("请先添加至少一个标签条件"); return; }
+  const query = buildLogQL(chips, keyword, traceId, level);
+  if (!query) { showError("请至少选择环境、应用或级别"); return; }
   const start = toUnix($("start").value);
   const end = toUnix($("end").value);
   if (!start || !end) { showError("请选择时间范围(可点快捷按钮)"); return; }
@@ -179,5 +168,6 @@ function renderChart(lines) {
   });
 }
 
-setRange(60); // 默认最近 1 小时
-loadLabels();
+setRange(60);       // 默认最近 1 小时
+loadAppValues();    // 填充应用下拉(需先有时间范围)
+loadFilters();      // 恢复 env、level

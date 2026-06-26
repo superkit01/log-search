@@ -7,9 +7,23 @@ function escapeLogQLValue(v) {
   return String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-// buildLogQL 由筛选条件拼装 LogQL。无流选择器(chips 为空)时返回 null,
+// 级别严重度升序。level 视作 Loki 流标签(值小写 debug/info/warn/error,与 logparse 一致)。
+const LEVEL_ORDER = ["debug", "info", "warn", "error"];
+
+// levelMatcher: 入参阈值级别,返回 "该级别及以上" 的 level 标签匹配器字符串,
+// 或 null(debug/空/未知 → 不加匹配器,显示全部,含无 level 标签的流)。
+// 例: "warn" → 'level=~"warn|error"'; "info" → 'level=~"info|warn|error"'; "error" → 'level=~"error"'。
+// 匹配值是固定可信串(级别名来自常量,无用户输入),不转义。
+function levelMatcher(level) {
+  const idx = LEVEL_ORDER.indexOf(level);
+  if (idx <= 0) return null; // debug(0)、空(-1)、未知(-1)都不加
+  return 'level=~"' + LEVEL_ORDER.slice(idx).join("|") + '"';
+}
+
+// buildLogQL 由筛选条件拼装 LogQL。流选择器(chips + level 匹配器)为空时返回 null,
 // 由调用方提示错误。chips: [{label, value}];重复标签折叠(后值覆盖)。
-function buildLogQL(chips, keyword, traceId) {
+// level: "debug"/"info"/"warn"/"error";非 debug 时并入流选择器作 level=~"..." 匹配器。
+function buildLogQL(chips, keyword, traceId, level) {
   const byLabel = {};
   const order = [];
   for (const c of chips) {
@@ -17,11 +31,11 @@ function buildLogQL(chips, keyword, traceId) {
     if (!(c.label in byLabel)) order.push(c.label);
     byLabel[c.label] = c.value;
   }
-  if (order.length === 0) return null;
-  const selector = "{" +
-    order.map((l) => l + '="' + escapeLogQLValue(byLabel[l]) + '"').join(", ") +
-    "}";
-  const parts = [selector];
+  const lm = levelMatcher(level);
+  if (order.length === 0 && !lm) return null;
+  const matchers = order.map((l) => l + '="' + escapeLogQLValue(byLabel[l]) + '"');
+  if (lm) matchers.push(lm);
+  const parts = ["{" + matchers.join(", ") + "}"];
   const kw = (keyword || "").trim();
   if (kw) parts.push('|= "' + escapeLogQLValue(kw) + '"');
   const tid = (traceId || "").trim();
@@ -30,5 +44,5 @@ function buildLogQL(chips, keyword, traceId) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { escapeLogQLValue, buildLogQL };
+  module.exports = { escapeLogQLValue, buildLogQL, levelMatcher };
 }
