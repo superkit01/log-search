@@ -123,7 +123,7 @@ async function search() {
 function renderResults(res) {
   const box = $("results");
   const lines = res.lines || [];
-  box.innerHTML = "";
+  box.replaceChildren();
   const meta = document.createElement("div");
   meta.className = "meta";
   meta.textContent = "返回 " + lines.length + " 行(总计 " + res.total + ")";
