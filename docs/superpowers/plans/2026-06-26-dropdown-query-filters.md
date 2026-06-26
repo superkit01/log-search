@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 把查询区的通用「标签+标签值+添加」chip 构建器替换为环境/级别/应用三个下拉框,级别按阈值生成 LogQL 正则行过滤,环境与级别选择持久化到 localStorage。
+**Goal:** 把查询区的通用「标签+标签值+添加」chip 构建器替换为环境/级别/应用三个下拉框,级别按阈值生成 `level=~"..."` 标签匹配器(并入流选择器),环境与级别选择持久化到 localStorage。
 
-**Architecture:** 纯前端改动。`logql.js`(纯函数,Node 单测)新增 `levelRegex` 并给 `buildLogQL` 加第 4 参 `level`;`index.html` 换控件;`app.js` 负责下拉框事件、应用列表加载、localStorage 读写与 `search` 重写。env/app 仍以 chip 形式进 `{}` 流选择器,level 进管道 `|~`。后端零改动。
+**Architecture:** 纯前端改动。`logql.js`(纯函数,Node 单测)新增 `levelMatcher` 并给 `buildLogQL` 加第 4 参 `level`;`index.html` 换控件;`app.js` 负责下拉框事件、应用列表加载、localStorage 读写与 `search` 重写。env/app 以 chip 形式、level 以 `level=~"..."` 匹配器形式**共同进 `{}` 流选择器**。后端零改动。
 
 **Tech Stack:** Go 1.24 + Gin(后端不动)、原生 JS + CDN Chart.js(前端)、`node:test`(logql.js 单测)。
 
@@ -13,77 +13,73 @@
 - **纯前端**:后端 Go 代码、响应结构(`/api/labels`、`/api/label/:name/values` 返回 `{"data":[...]}`;`/api/query_range` 直接返回 `{lines,total}`)、错误映射契约(`web.lokiStatusAndBody`)均不变。
 - `go` 指令钉在 1.24 行(`go 1.24.5`);gin v1.10.0;`go mod tidy` 不得抬升指令或降级 gin(否则视为回归)。
 - 日志行用 `textContent` 渲染(防 XSS)——保持。
+- **level 标签前提**:日志流须带 `level` 标签(值小写 `debug/info/warn/error`,与 `logparse` 一致);否则 level 过滤无结果。本计划据此假设实现。
 - `buildLogQL` 第 4 参 `level` **向后兼容**:3 参调用结果不变(现有 `web/logql.test.js` 用例全绿)。
 - 无前端构建步骤;plain JS,函数为全局(经典 `<script>` 加载)。
 - 每个任务结束 commit;提交信息末尾加 `Co-Authored-By: Claude <noreply@anthropic.com>`。
 
 ---
 
-### Task 1: `logql.js` 增加级别阈值正则过滤(TDD)
+### Task 1: `logql.js` 增加级别阈值标签匹配器(TDD)
 
 **Files:**
 - Modify: `web/static/logql.js`(全文重写,见 Step 3)
 - Test: `web/logql.test.js`(追加用例,见 Step 1)
 
 **Interfaces:**
-- Produces: `levelRegex(level: string|null|undefined): string|null` —— 入参 `"debug"/"info"/"warn"/"error"`;`debug`、空串、`undefined`、未知值 → 返回 `null`(不加过滤);`info/warn/error` → 返回形如 `(?i)\b(?:INFO|...|PANIC)\b` 的正则字符串(注意:返回值里是**字面反斜杠** `\b`,JS 源码里写作 `\\b`)。
-- Produces: `buildLogQL(chips, keyword, traceId, level)` —— 第 4 参 `level` 缺省时等价 `"debug"`(不过滤);非空且非 debug 时在关键词 `|=` 之后、trace_id 之前追加 `|~ "<levelRegex>"`。正则为固定可信串,**不经 `escapeLogQLValue`**。
-- Exports: `{ escapeLogQLValue, buildLogQL, levelRegex }`。
+- Produces: `levelMatcher(level: string|null|undefined): string|null` —— 入参 `"debug"/"info"/"warn"/"error"`;`debug`、空串、`undefined`、未知值 → 返回 `null`(不加匹配器);`info/warn/error` → 返回形如 `level=~"info|warn|error"` 的**流选择器匹配器字符串**(level 是 Loki 流标签,用 `=~` 正则匹配器取"该级别及以上";值是级别名用 `|` 连接,固定可信串)。
+- Produces: `buildLogQL(chips, keyword, traceId, level)` —— 第 4 参 `level` 缺省时等价 `"debug"`(不加匹配器);非空且非 debug 时把 `levelMatcher(level)` 的结果**并入流选择器 `{}` 内**(在 env/app 之后)。流选择器为空(env/app 都空 且 level=debug/空)时返回 `null`。
+- Exports: `{ escapeLogQLValue, buildLogQL, levelMatcher }`。
 
 - [ ] **Step 1: 追加失败测试**
 
-在 `web/logql.test.js` 顶部把 require 改为解构出 `levelRegex`:
+在 `web/logql.test.js` 顶部把 require 改为解构出 `levelMatcher`:
 
 ```js
-const { escapeLogQLValue, buildLogQL, levelRegex } = require("./static/logql.js");
+const { escapeLogQLValue, buildLogQL, levelMatcher } = require("./static/logql.js");
 ```
 
 在文件末尾追加:
 
 ```js
-test("levelRegex: debug/空/undefined/未知 → null", () => {
-  assert.strictEqual(levelRegex("debug"), null);
-  assert.strictEqual(levelRegex(""), null);
-  assert.strictEqual(levelRegex(undefined), null);
-  assert.strictEqual(levelRegex("bogus"), null);
+test("levelMatcher: debug/空/undefined/未知 → null", () => {
+  assert.strictEqual(levelMatcher("debug"), null);
+  assert.strictEqual(levelMatcher(""), null);
+  assert.strictEqual(levelMatcher(undefined), null);
+  assert.strictEqual(levelMatcher("bogus"), null);
 });
 
-test("levelRegex: info → info 及以上关键词并集", () => {
-  assert.strictEqual(
-    levelRegex("info"),
-    "(?i)\\b(?:INFO|INFORMATION|WARN|WARNING|ERROR|ERR|FATAL|PANIC)\\b"
-  );
+test("levelMatcher: info → info 及以上", () => {
+  assert.strictEqual(levelMatcher("info"), 'level=~"info|warn|error"');
 });
 
-test("levelRegex: warn → warn 及以上", () => {
-  assert.strictEqual(
-    levelRegex("warn"),
-    "(?i)\\b(?:WARN|WARNING|ERROR|ERR|FATAL|PANIC)\\b"
-  );
+test("levelMatcher: warn → warn 及以上", () => {
+  assert.strictEqual(levelMatcher("warn"), 'level=~"warn|error"');
 });
 
-test("levelRegex: error → 仅 error 及以上", () => {
-  assert.strictEqual(
-    levelRegex("error"),
-    "(?i)\\b(?:ERROR|ERR|FATAL|PANIC)\\b"
-  );
+test("levelMatcher: error → 仅 error", () => {
+  assert.strictEqual(levelMatcher("error"), 'level=~"error"');
 });
 
-test("buildLogQL: level=warn 追加为 |~ 正则行过滤", () => {
+test("buildLogQL: level=warn 并入流选择器作 level=~ 匹配器", () => {
   assert.strictEqual(
     buildLogQL([{ label: "app", value: "nginx" }], "", "", "warn"),
-    '{app="nginx"} |~ "(?i)\\b(?:WARN|WARNING|ERROR|ERR|FATAL|PANIC)\\b"'
+    '{app="nginx", level=~"warn|error"}'
   );
 });
 
-test("buildLogQL: level=debug 不追加级别过滤", () => {
+test("buildLogQL: level=debug 不加 level 匹配器", () => {
   assert.strictEqual(
     buildLogQL([{ label: "app", value: "nginx" }], "", "", "debug"),
     '{app="nginx"}'
   );
 });
 
-test("buildLogQL: env+app+level+kw+trace 完整组合,顺序为 selector |= |~ | trace_id", () => {
+test("buildLogQL: 无 chip 且 level=warn → 仅 level 选择器(合法)", () => {
+  assert.strictEqual(buildLogQL([], "", "", "warn"), '{level=~"warn|error"}');
+});
+
+test("buildLogQL: env+app+level+kw+trace 完整组合", () => {
   assert.strictEqual(
     buildLogQL(
       [{ label: "env", value: "prod" }, { label: "app", value: "nginx" }],
@@ -91,7 +87,7 @@ test("buildLogQL: env+app+level+kw+trace 完整组合,顺序为 selector |= |~ |
       "t1",
       "warn"
     ),
-    '{env="prod", app="nginx"} |= "timeout" |~ "(?i)\\b(?:WARN|WARNING|ERROR|ERR|FATAL|PANIC)\\b" | trace_id="t1"'
+    '{env="prod", app="nginx", level=~"warn|error"} |= "timeout" | trace_id="t1"'
   );
 });
 ```
@@ -99,7 +95,7 @@ test("buildLogQL: env+app+level+kw+trace 完整组合,顺序为 selector |= |~ |
 - [ ] **Step 2: 运行测试,确认失败**
 
 Run: `node --test web/logql.test.js`
-Expected: FAIL —— 新增用例报 `levelRegex is not a function`(尚未实现/导出)。原有的 escapeLogQLValue / 3 参 buildLogQL 用例应仍 PASS。
+Expected: FAIL —— 新增用例报 `levelMatcher is not a function`(尚未实现/导出)。原有的 escapeLogQLValue / 3 参 buildLogQL 用例应仍 PASS。
 
 - [ ] **Step 3: 用以下内容整体覆盖 `web/static/logql.js`**
 
@@ -113,27 +109,22 @@ function escapeLogQLValue(v) {
   return String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-// 级别阈值 → 正则。严重度升序:debug < info < warn < error。
-// 阈值取"该档及以上"各档关键词的并集,词边界 \b 包裹、大小写不敏感((?i))。
-// debug/空/未知 → 返回 null(调用方不加级别过滤,显示全部,含无法识别级别的行)。
-// 词边界保证 ERR 不会误命中 ERROR 内部;各 token 顺序不影响正确性。
+// 级别严重度升序。level 视作 Loki 流标签(值小写 debug/info/warn/error,与 logparse 一致)。
 const LEVEL_ORDER = ["debug", "info", "warn", "error"];
-const LEVEL_TOKENS = {
-  debug: ["DEBUG", "TRACE"],
-  info: ["INFO", "INFORMATION"],
-  warn: ["WARN", "WARNING"],
-  error: ["ERROR", "ERR", "FATAL", "PANIC"],
-};
-function levelRegex(level) {
+
+// levelMatcher: 入参阈值级别,返回 "该级别及以上" 的 level 标签匹配器字符串,
+// 或 null(debug/空/未知 → 不加匹配器,显示全部,含无 level 标签的流)。
+// 例: "warn" → 'level=~"warn|error"'; "info" → 'level=~"info|warn|error"'; "error" → 'level=~"error"'。
+// 匹配值是固定可信串(级别名来自常量,无用户输入),不转义。
+function levelMatcher(level) {
   const idx = LEVEL_ORDER.indexOf(level);
-  if (idx <= 0) return null; // debug(0)、空(-1)、未知(-1)都不过滤
-  const tokens = LEVEL_ORDER.slice(idx).flatMap((l) => LEVEL_TOKENS[l]);
-  return "(?i)\\b(?:" + tokens.join("|") + ")\\b";
+  if (idx <= 0) return null; // debug(0)、空(-1)、未知(-1)都不加
+  return 'level=~"' + LEVEL_ORDER.slice(idx).join("|") + '"';
 }
 
-// buildLogQL 由筛选条件拼装 LogQL。无流选择器(chips 为空)时返回 null,
+// buildLogQL 由筛选条件拼装 LogQL。流选择器(chips + level 匹配器)为空时返回 null,
 // 由调用方提示错误。chips: [{label, value}];重复标签折叠(后值覆盖)。
-// level: "debug"/"info"/"warn"/"error";debug 或缺省 → 不加级别过滤。
+// level: "debug"/"info"/"warn"/"error";非 debug 时并入流选择器作 level=~"..." 匹配器。
 function buildLogQL(chips, keyword, traceId, level) {
   const byLabel = {};
   const order = [];
@@ -142,41 +133,39 @@ function buildLogQL(chips, keyword, traceId, level) {
     if (!(c.label in byLabel)) order.push(c.label);
     byLabel[c.label] = c.value;
   }
-  if (order.length === 0) return null;
-  const selector = "{" +
-    order.map((l) => l + '="' + escapeLogQLValue(byLabel[l]) + '"').join(", ") +
-    "}";
-  const parts = [selector];
+  const lm = levelMatcher(level);
+  if (order.length === 0 && !lm) return null;
+  const matchers = order.map((l) => l + '="' + escapeLogQLValue(byLabel[l]) + '"');
+  if (lm) matchers.push(lm);
+  const parts = ["{" + matchers.join(", ") + "}"];
   const kw = (keyword || "").trim();
   if (kw) parts.push('|= "' + escapeLogQLValue(kw) + '"');
-  const lr = levelRegex(level);
-  if (lr) parts.push('|~ "' + lr + '"');
   const tid = (traceId || "").trim();
   if (tid) parts.push('| trace_id="' + escapeLogQLValue(tid) + '"');
   return parts.join(" ");
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { escapeLogQLValue, buildLogQL, levelRegex };
+  module.exports = { escapeLogQLValue, buildLogQL, levelMatcher };
 }
 ```
 
 - [ ] **Step 4: 运行测试,确认全绿**
 
 Run: `node --test web/logql.test.js`
-Expected: PASS —— 新增 7 条用例 + 原有用例全部通过。
+Expected: PASS —— 新增 8 条用例 + 原有用例全部通过。
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add web/static/logql.js web/logql.test.js
 git commit -m "$(cat <<'EOF'
-feat(web): level threshold regex filter in buildLogQL
+feat(web): level threshold label matcher in buildLogQL
 
-Add levelRegex and a 4th `level` param to buildLogQL. debug/empty/unknown
-yields no filter; info/warn/error append a `|~` regex of the level keywords
-at or above the threshold. Backward compatible: existing 3-arg calls are
-unchanged.
+Add levelMatcher and a 4th `level` param to buildLogQL. debug/empty/unknown
+yields no matcher; info/warn/error merge a `level=~"..."` regex label matcher
+into the stream selector (level is a Loki label). Backward compatible:
+existing 3-arg calls are unchanged.
 
 Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
@@ -343,7 +332,7 @@ async function search() {
   const keyword = $("keyword").value.trim();
   const traceId = $("trace-id").value.trim();
   const query = buildLogQL(chips, keyword, traceId, level);
-  if (!query) { showError("请至少选择环境或应用"); return; }
+  if (!query) { showError("请至少选择环境、应用或级别"); return; }
   const start = toUnix($("start").value);
   const end = toUnix($("end").value);
   if (!start || !end) { showError("请选择时间范围(可点快捷按钮)"); return; }
@@ -449,8 +438,9 @@ Run: `make build && ./bin/log-search`(或 `make run`),浏览器打开 `http://lo
 Expected:
 - 查询区显示 环境/级别/应用 三个下拉框 + 查询按钮;无原"标签/标签值/添加"控件,无 chip 面板。
 - 级别默认选中 `info`;应用下拉含"不限" + 实际应用列表(Loki 不可达时显示错误条,应用仅"不限",属预期)。
-- 选 环境=生产、级别=warn、应用=某应用 → 点查询 →(用浏览器 DevTools Network 看 `/api/query_range` 的 `query` 参数)应形如 `{env="prod", app="..."} |~ "(?i)\b(WARN|WARNING|ERROR|ERR|FATAL|PANIC)\b"`。
-- 环境/级别都"不限" → 点查询 → 出现"请至少选择环境或应用"。
+- 选 环境=生产、级别=warn、应用=某应用 → 点查询 →(用浏览器 DevTools Network 看 `/api/query_range` 的 `query` 参数)应形如 `{env="prod", app="...", level=~"warn|error"}`(level 作为标签匹配器在选择器内)。
+- 仅选 级别=warn(环境/应用不限)→ 点查询 → query 形如 `{level=~"warn|error"}`,属合法查询。
+- 环境/应用都不选 且 级别=debug → 点查询 → 出现"请至少选择环境、应用或级别"。
 - 改 环境/级别 后刷新页面 → 两个下拉框恢复上次选择(localStorage 生效);应用下拉重新加载。
 
 - [ ] **Step 6: Commit**
@@ -462,8 +452,9 @@ feat(web): dropdown-driven query filters with localStorage
 
 Replace the generic label/value chip builder with three dropdowns
 (env / level / app). env and app become stream-selector matchers; level
-applies the threshold regex from buildLogQL. env+level persist to
-localStorage and restore on load; app list loads from /api/label/app/values.
+becomes a level=~ label matcher in the stream selector (via buildLogQL).
+env+level persist to localStorage and restore on load; app list loads
+from /api/label/app/values.
 
 Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
