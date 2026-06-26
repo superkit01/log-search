@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert");
-const { escapeLogQLValue, buildLogQL } = require("./static/logql.js");
+const { escapeLogQLValue, buildLogQL, levelMatcher } = require("./static/logql.js");
 
 test("escapeLogQLValue: 普通值不变", () => {
   assert.strictEqual(escapeLogQLValue("nginx"), "nginx");
@@ -75,5 +75,54 @@ test("buildLogQL: 各值中的特殊字符被转义", () => {
   assert.strictEqual(
     buildLogQL([{ label: "app", value: 'a"b' }], 'c"d', 'e"f'),
     '{app="a\\"b"} |= "c\\"d" | trace_id="e\\"f"'
+  );
+});
+
+test("levelMatcher: debug/空/undefined/未知 → null", () => {
+  assert.strictEqual(levelMatcher("debug"), null);
+  assert.strictEqual(levelMatcher(""), null);
+  assert.strictEqual(levelMatcher(undefined), null);
+  assert.strictEqual(levelMatcher("bogus"), null);
+});
+
+test("levelMatcher: info → info 及以上", () => {
+  assert.strictEqual(levelMatcher("info"), 'level=~"info|warn|error"');
+});
+
+test("levelMatcher: warn → warn 及以上", () => {
+  assert.strictEqual(levelMatcher("warn"), 'level=~"warn|error"');
+});
+
+test("levelMatcher: error → 仅 error", () => {
+  assert.strictEqual(levelMatcher("error"), 'level=~"error"');
+});
+
+test("buildLogQL: level=warn 并入流选择器作 level=~ 匹配器", () => {
+  assert.strictEqual(
+    buildLogQL([{ label: "app", value: "nginx" }], "", "", "warn"),
+    '{app="nginx", level=~"warn|error"}'
+  );
+});
+
+test("buildLogQL: level=debug 不加 level 匹配器", () => {
+  assert.strictEqual(
+    buildLogQL([{ label: "app", value: "nginx" }], "", "", "debug"),
+    '{app="nginx"}'
+  );
+});
+
+test("buildLogQL: 无 chip 且 level=warn → 仅 level 选择器(合法)", () => {
+  assert.strictEqual(buildLogQL([], "", "", "warn"), '{level=~"warn|error"}');
+});
+
+test("buildLogQL: env+app+level+kw+trace 完整组合", () => {
+  assert.strictEqual(
+    buildLogQL(
+      [{ label: "env", value: "prod" }, { label: "app", value: "nginx" }],
+      "timeout",
+      "t1",
+      "warn"
+    ),
+    '{env="prod", app="nginx", level=~"warn|error"} |= "timeout" | trace_id="t1"'
   );
 });
