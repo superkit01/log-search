@@ -8,34 +8,54 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
-  <header><h1>日志查询</h1></header>
+  <header>
+    <h1>日志查询</h1>
+    <button id="theme-toggle" class="theme-toggle" title="切换主题">
+      <svg class="theme-icon-dark" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="5"></circle>
+        <line x1="12" y1="1" x2="12" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="23"></line>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+        <line x1="1" y1="12" x2="3" y2="12"></line>
+        <line x1="21" y1="12" x2="23" y2="12"></line>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+      </svg>
+      <svg class="theme-icon-light" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+    </button>
+  </header>
   <main>
     <section class="controls">
       <div class="row">
-        <label>环境
-          <select id="env-select">
-            <option value="">不限</option>
-            <option value="dev">开发</option>
-            <option value="test">测试</option>
-            <option value="prod">生产</option>
-          </select>
-        </label>
-        <label>级别
-          <select id="level-select">
-            <option value="debug">debug</option>
-            <option value="info">info</option>
-            <option value="warn">warn</option>
-            <option value="error">error</option>
-          </select>
-        </label>
-        <label>应用
-          <select id="app-select"><option value="">不限</option></select>
-        </label>
-        <button type="button" id="search">查询</button>
+        <div class="env-tabs level-tabs" id="level-tabs">
+          <button class="env-tab" data-value="debug">DEBUG</button>
+          <button class="env-tab active" data-value="info">INFO</button>
+          <button class="env-tab" data-value="warn">WARN</button>
+          <button class="env-tab" data-value="error">ERROR</button>
+        </div>
+        <div class="env-tabs direction-tabs" id="direction-tabs">
+          <button class="env-tab active" data-value="BACKWARD">倒序</button>
+          <button class="env-tab" data-value="FORWARD">正序</button>
+        </div>
+        <div class="env-tabs" id="env-tabs">
+          <button class="env-tab" data-value="dev">开发</button>
+          <button class="env-tab" data-value="test">测试</button>
+          <button class="env-tab active" data-value="prod">生产</button>
+        </div>
       </div>
       <div class="row">
-        <label>关键词<input type="text" id="keyword" placeholder="匹配日志文本,如 error"></label>
-        <label>trace_id<input type="text" id="trace-id" placeholder="结构化元数据 trace_id"></label>
+        <label><span class="lbl">应用</span>
+          <select id="app-select"><option value="">不限</option></select>
+        </label>
+      </div>
+      <div class="row">
+        <label class="full-width"><span class="lbl">链路id</span><input type="text" id="trace-id" placeholder="结构化元数据 trace_id"></label>
+      </div>
+      <div class="row">
+        <label class="full-width"><span class="lbl">关键词</span><input type="text" id="keyword" placeholder="匹配日志文本,如 error"></label>
       </div>
       <div class="row">
         <span class="range-group">快捷:
@@ -44,12 +64,9 @@
           <button type="button" data-mins="360">6h</button>
           <button type="button" data-mins="1440">24h</button>
         </span>
-        <label>起 <input type="datetime-local" id="start"></label>
-        <label>止 <input type="datetime-local" id="end"></label>
-        <label>方向
-          <select id="direction"><option value="BACKWARD">倒序</option><option value="FORWARD">正序</option></select>
-        </label>
-        <label>条数 <input type="number" id="limit" value="{{.defaultLimit}}" min="1" max="5000"></label>
+        <label><span class="lbl">开始时间</span> <input type="datetime-local" id="start"></label>
+        <label><span class="lbl">结束时间</span> <input type="datetime-local" id="end"></label>
+        <button type="button" id="search">查询</button>
       </div>
     </section>
 

@@ -1,6 +1,30 @@
 const $ = (id) => document.getElementById(id);
 let chart;
 const FILTERS_KEY = "log-search:filters"; // localStorage 键:存 {env, level}
+const THEME_KEY = "log-search:theme"; // localStorage 键:存主题
+
+// 主题切换
+function toggleTheme() {
+  const isLight = document.body.classList.toggle("light-theme");
+  localStorage.setItem(THEME_KEY, isLight ? "light" : "dark");
+  updateThemeIcon();
+}
+
+function updateThemeIcon() {
+  const isLight = document.body.classList.contains("light-theme");
+  document.querySelector(".theme-icon-dark").style.display = isLight ? "none" : "block";
+  document.querySelector(".theme-icon-light").style.display = isLight ? "block" : "none";
+}
+
+function loadTheme() {
+  const saved = localStorage.getItem(THEME_KEY);
+  if (saved === "light") {
+    document.body.classList.add("light-theme");
+  }
+  updateThemeIcon();
+}
+
+$("theme-toggle").addEventListener("click", toggleTheme);
 
 function unixNow() { return Math.floor(Date.now() / 1000); }
 
@@ -45,7 +69,11 @@ async function loadAppValues() {
 // saveFilters 把当前 env、level 写入 localStorage;失败静默降级(隐私模式等)。
 function saveFilters() {
   try {
-    const filters = { env: $("env-select").value, level: $("level-select").value };
+    const envTab = document.querySelector("#env-tabs .env-tab.active");
+    const env = envTab ? envTab.dataset.value : "";
+    const levelTab = document.querySelector("#level-tabs .env-tab.active");
+    const level = levelTab ? levelTab.dataset.value : "info";
+    const filters = { env, level };
     localStorage.setItem(FILTERS_KEY, JSON.stringify(filters));
   } catch (_) { /* localStorage 不可用时忽略,不阻塞查询 */ }
 }
@@ -61,12 +89,45 @@ function loadFilters() {
       if (f && typeof f.level === "string") level = f.level;
     }
   } catch (_) { /* 解析失败用默认值 */ }
-  if (env) $("env-select").value = env;
-  $("level-select").value = level;
+  // 设置级别选项卡active状态
+  document.querySelectorAll("#level-tabs .env-tab").forEach(tab => {
+    if (tab.dataset.value === level) {
+      tab.classList.add("active");
+    }
+  });
+  // 设置环境选项卡active状态
+  document.querySelectorAll("#env-tabs .env-tab").forEach(tab => {
+    if (tab.dataset.value === env) {
+      tab.classList.add("active");
+    }
+  });
 }
 
-$("env-select").addEventListener("change", saveFilters);
-$("level-select").addEventListener("change", saveFilters);
+// 级别选项卡点击处理
+document.querySelectorAll("#level-tabs .env-tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll("#level-tabs .env-tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    saveFilters();
+  });
+});
+
+// 环境选项卡点击处理
+document.querySelectorAll("#env-tabs .env-tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll("#env-tabs .env-tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    saveFilters();
+  });
+});
+
+// 方向选项卡点击处理
+document.querySelectorAll("#direction-tabs .env-tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll("#direction-tabs .env-tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+  });
+});
 
 // setRange 把起止时间设为 [end - mins, end],供快捷按钮和页面默认值共用。
 function setRange(mins) {
@@ -83,9 +144,11 @@ $("search").addEventListener("click", search);
 
 async function search() {
   hideError();
-  const env = $("env-select").value;
+  const envTab = document.querySelector("#env-tabs .env-tab.active");
+  const env = envTab ? envTab.dataset.value : "";
   const app = $("app-select").value;
-  const level = $("level-select").value;
+  const levelTab = document.querySelector("#level-tabs .env-tab.active");
+  const level = levelTab ? levelTab.dataset.value : "info";
   const chips = [];
   if (env) chips.push({ label: "env", value: env });
   if (app) chips.push({ label: "app", value: app });
@@ -96,8 +159,9 @@ async function search() {
   const start = toUnix($("start").value);
   const end = toUnix($("end").value);
   if (!start || !end) { showError("请选择时间范围(可点快捷按钮)"); return; }
-  const limit = $("limit").value || 1000;
-  const direction = $("direction").value;
+  const limit = 1000;
+  const directionTab = document.querySelector("#direction-tabs .env-tab.active");
+  const direction = directionTab ? directionTab.dataset.value : "BACKWARD";
   const url = "/api/query_range?query=" + encodeURIComponent(query) +
     "&start=" + start + "&end=" + end + "&limit=" + limit + "&direction=" + direction;
   try {
@@ -171,3 +235,4 @@ function renderChart(lines) {
 setRange(60);       // 默认最近 1 小时
 loadAppValues();    // 填充应用下拉(需先有时间范围)
 loadFilters();      // 恢复 env、level
+loadTheme();        // 恢复主题
