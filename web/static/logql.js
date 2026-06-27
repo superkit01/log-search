@@ -22,8 +22,8 @@ function levelMatcher(level) {
 
 // buildLogQL 由筛选条件拼装 LogQL。流选择器(chips + level 匹配器)为空时返回 null,
 // 由调用方提示错误。chips: [{label, value}];重复标签折叠(后值覆盖)。
-// level: "debug"/"info"/"warn"/"error";非 debug 时并入流选择器作 level=~"..." 匹配器。
-function buildLogQL(chips, keyword, traceId, level) {
+// levels: 级别数组,如 ["info", "warn"];空数组时不加 level 匹配器。
+function buildLogQL(chips, keyword, traceId, levels) {
   const byLabel = {};
   const order = [];
   for (const c of chips) {
@@ -31,7 +31,7 @@ function buildLogQL(chips, keyword, traceId, level) {
     if (!(c.label in byLabel)) order.push(c.label);
     byLabel[c.label] = c.value;
   }
-  const lm = levelMatcher(level);
+  const lm = levels && levels.length > 0 ? 'level=~"' + levels.join("|") + '"' : null;
   if (order.length === 0 && !lm) return null;
   const matchers = order.map((l) => l + '="' + escapeLogQLValue(byLabel[l]) + '"');
   if (lm) matchers.push(lm);

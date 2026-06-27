@@ -66,48 +66,70 @@ async function loadAppValues() {
   } catch (e) { showError(e.message); }
 }
 
-// saveFilters 把当前 env、level 写入 localStorage;失败静默降级(隐私模式等)。
+// saveFilters 把当前 env、levels、direction 写入 localStorage;失败静默降级(隐私模式等)。
 function saveFilters() {
   try {
     const envTab = document.querySelector("#env-tabs .env-tab.active");
     const env = envTab ? envTab.dataset.value : "";
-    const levelTab = document.querySelector("#level-tabs .env-tab.active");
-    const level = levelTab ? levelTab.dataset.value : "info";
-    const filters = { env, level };
+    const levelTabs = document.querySelectorAll("#level-tabs .env-tab.active");
+    const levels = Array.from(levelTabs).map(t => t.dataset.value);
+    const directionTab = document.querySelector("#direction-tabs .env-tab.active");
+    const direction = directionTab ? directionTab.dataset.value : "BACKWARD";
+    const filters = { env, levels, direction };
     localStorage.setItem(FILTERS_KEY, JSON.stringify(filters));
   } catch (_) { /* localStorage 不可用时忽略,不阻塞查询 */ }
 }
 
 // loadFilters 从 localStorage 恢复 env、level;无记录或解析失败用默认值(env 不限、level=info)。
 function loadFilters() {
-  let env = "", level = "info";
+  let env = "", levels = ["info"], direction = "";
   try {
     const raw = localStorage.getItem(FILTERS_KEY);
     if (raw) {
       const f = JSON.parse(raw);
       if (f && typeof f.env === "string") env = f.env;
-      if (f && typeof f.level === "string") level = f.level;
+      if (f && Array.isArray(f.levels) && f.levels.length > 0) levels = f.levels;
+      if (f && typeof f.direction === "string") direction = f.direction;
     }
   } catch (_) { /* 解析失败用默认值 */ }
-  // 设置级别选项卡active状态
+
+  // 清除所有选项卡的active类
+  document.querySelectorAll(".env-tab").forEach(tab => tab.classList.remove("active"));
+
+  // 设置级别选项卡active状态（支持多选）
+  const levelsSet = new Set(levels);
   document.querySelectorAll("#level-tabs .env-tab").forEach(tab => {
-    if (tab.dataset.value === level) {
+    if (levelsSet.has(tab.dataset.value)) {
       tab.classList.add("active");
     }
   });
-  // 设置环境选项卡active状态
+
+  // 设置环境选项卡active状态（默认prod）
+  const envValue = env || "prod";
   document.querySelectorAll("#env-tabs .env-tab").forEach(tab => {
-    if (tab.dataset.value === env) {
+    if (tab.dataset.value === envValue) {
+      tab.classList.add("active");
+    }
+  });
+
+  // 设置方向选项卡active状态（默认BACKWARD）
+  const directionValue = direction || "BACKWARD";
+  document.querySelectorAll("#direction-tabs .env-tab").forEach(tab => {
+    if (tab.dataset.value === directionValue) {
       tab.classList.add("active");
     }
   });
 }
 
-// 级别选项卡点击处理
+// 级别选项卡点击处理（支持多选）
 document.querySelectorAll("#level-tabs .env-tab").forEach((tab) => {
   tab.addEventListener("click", () => {
-    document.querySelectorAll("#level-tabs .env-tab").forEach(t => t.classList.remove("active"));
-    tab.classList.add("active");
+    tab.classList.toggle("active");
+    // 确保至少有一个选中
+    const hasActive = document.querySelector("#level-tabs .env-tab.active");
+    if (!hasActive) {
+      tab.classList.add("active");
+    }
     saveFilters();
   });
 });
@@ -126,6 +148,7 @@ document.querySelectorAll("#direction-tabs .env-tab").forEach((tab) => {
   tab.addEventListener("click", () => {
     document.querySelectorAll("#direction-tabs .env-tab").forEach(t => t.classList.remove("active"));
     tab.classList.add("active");
+    saveFilters();
   });
 });
 
@@ -147,14 +170,19 @@ async function search() {
   const envTab = document.querySelector("#env-tabs .env-tab.active");
   const env = envTab ? envTab.dataset.value : "";
   const app = $("app-select").value;
-  const levelTab = document.querySelector("#level-tabs .env-tab.active");
-  const level = levelTab ? levelTab.dataset.value : "info";
+  const levelTabs = document.querySelectorAll("#level-tabs .env-tab.active");
+  const allLevelTabs = document.querySelectorAll("#level-tabs .env-tab");
+  let levels = Array.from(levelTabs).map(t => t.dataset.value);
+  // 如果全部选中，去掉level过滤条件
+  if (levelTabs.length === allLevelTabs.length) {
+    levels = [];
+  }
   const chips = [];
   if (env) chips.push({ label: "env", value: env });
   if (app) chips.push({ label: "app", value: app });
   const keyword = $("keyword").value.trim();
   const traceId = $("trace-id").value.trim();
-  const query = buildLogQL(chips, keyword, traceId, level);
+  const query = buildLogQL(chips, keyword, traceId, levels);
   if (!query) { showError("请至少选择环境、应用或级别"); return; }
   const start = toUnix($("start").value);
   const end = toUnix($("end").value);
