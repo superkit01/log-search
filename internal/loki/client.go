@@ -154,8 +154,12 @@ func (c *httpClient) get(ctx context.Context, path string, params url.Values, ou
 		return &HTTPError{StatusCode: resp.StatusCode, Message: msg}
 	}
 	if out != nil {
+		// Empty data field is valid (means no results), skip unmarshal
+		if len(ar.Data) == 0 {
+			return nil
+		}
 		if err := json.Unmarshal(ar.Data, out); err != nil {
-			return fmt.Errorf("loki: decode data %s: %w", path, err)
+			return fmt.Errorf("loki: decode data %s: %w (data=%q)", path, err, string(ar.Data))
 		}
 	}
 	return nil

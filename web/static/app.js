@@ -212,16 +212,137 @@ function renderResults(res) {
   lines.forEach((l) => {
     const row = document.createElement("div");
     row.className = "line lvl-" + (l.level || "info");
+
+    // 时间戳（东八区）分成两行显示
     const ts = document.createElement("span");
     ts.className = "ts";
-    ts.textContent = l.ts;
-    const txt = document.createElement("span");
+    const tsDate = document.createElement("div");
+    tsDate.className = "ts-date";
+    tsDate.textContent = toBeijingDate(l.ts);
+    const tsTime = document.createElement("div");
+    tsTime.className = "ts-time";
+    tsTime.textContent = toBeijingTime(l.ts);
+    ts.appendChild(tsDate);
+    ts.appendChild(tsTime);
+
+    // 内容区域（标签 + 日志文本）
+    const content = document.createElement("div");
+    content.className = "content";
+
+    // 标签区域
+    const tags = document.createElement("div");
+    tags.className = "tags";
+
+    // 添加 app 标签
+    if (l.labels && l.labels.app) {
+      const appTag = document.createElement("span");
+      appTag.className = "tag tag-app";
+      appTag.textContent = "app: " + l.labels.app;
+      tags.appendChild(appTag);
+    }
+
+    // 添加 level 标签
+    const levelTag = document.createElement("span");
+    levelTag.className = "tag tag-level";
+    levelTag.textContent = "level: " + (l.level || "info");
+    tags.appendChild(levelTag);
+
+    // 添加其他标签（根据类型添加不同的CSS类）
+    if (l.labels) {
+      Object.entries(l.labels).forEach(([key, value]) => {
+        if (key !== "app" && key !== "level") {
+          const tag = document.createElement("span");
+          const tagClass = getTagClass(key);
+          tag.className = "tag " + tagClass;
+          tag.textContent = key + ": " + value;
+          tags.appendChild(tag);
+        }
+      });
+    }
+
+    // 日志文本（支持折叠/展开）
+    const txt = document.createElement("div");
     txt.className = "txt";
-    txt.textContent = l.line;
+
+    const lines = l.line.split('\n');
+    if (lines.length > 10) {
+      // 创建折叠容器
+      const txtWrapper = document.createElement("div");
+      txtWrapper.className = "txt-wrapper collapsed";
+
+      // 显示前10行
+      const previewLines = lines.slice(0, 10);
+      const previewText = document.createElement("div");
+      previewText.className = "txt-preview";
+      previewText.textContent = previewLines.join('\n');
+      txtWrapper.appendChild(previewText);
+
+      // 隐藏的完整内容
+      const fullText = document.createElement("div");
+      fullText.className = "txt-full";
+      fullText.textContent = l.line;
+      txtWrapper.appendChild(fullText);
+
+      // 展开/折叠按钮
+      const toggleBtn = document.createElement("button");
+      toggleBtn.className = "txt-toggle";
+      toggleBtn.textContent = "展开 >>";
+      toggleBtn.onclick = () => {
+        txtWrapper.classList.toggle("collapsed");
+        toggleBtn.textContent = txtWrapper.classList.contains("collapsed") ? "展开 >>" : "<< 折叠";
+      };
+
+      txt.appendChild(txtWrapper);
+      txt.appendChild(toggleBtn);
+    } else {
+      txt.textContent = l.line;
+    }
+
+    content.appendChild(tags);
+    content.appendChild(txt);
     row.appendChild(ts);
-    row.appendChild(txt);
+    row.appendChild(content);
     box.appendChild(row);
   });
+}
+
+// 转换日期为东八区（UTC+8）- 格式：2026-06-28
+function toBeijingDate(isoString) {
+  const d = new Date(isoString);
+  const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
+  const beijingTime = new Date(utc + (3600000 * 8));
+  return beijingTime.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).replace(/\//g, '-');
+}
+
+// 转换时间为东八区（UTC+8）- 格式：20:05:30.123
+function toBeijingTime(isoString) {
+  const d = new Date(isoString);
+  const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
+  const beijingTime = new Date(utc + (3600000 * 8));
+
+  const hours = String(beijingTime.getHours()).padStart(2, '0');
+  const minutes = String(beijingTime.getMinutes()).padStart(2, '0');
+  const seconds = String(beijingTime.getSeconds()).padStart(2, '0');
+  const milliseconds = String(beijingTime.getMilliseconds()).padStart(3, '0');
+
+  return `${hours}:${minutes}:${seconds}.${milliseconds}`;
+}
+
+// 根据标签key返回对应的CSS类
+function getTagClass(key) {
+  const tagMap = {
+    'env': 'tag-env',
+    'region': 'tag-region',
+    'instance': 'tag-instance',
+    'host': 'tag-host',
+    'job': 'tag-instance',
+    'service': 'tag-app'
+  };
+  return tagMap[key] || '';
 }
 
 function renderChart(lines) {

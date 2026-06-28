@@ -2,6 +2,7 @@ package web
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -82,6 +83,7 @@ func (h *Handler) queryRange(c *gin.Context) {
 	res, err := h.Loki.QueryRange(c.Request.Context(), query, start, end, limit, direction)
 	if err != nil {
 		status, body := lokiStatusAndBody(err)
+		log.Printf("[Loki Error] %s %s: %v", c.Request.Method, c.Request.URL.Path, err)
 		c.JSON(status, gin.H{"error": body})
 		return
 	}
@@ -112,6 +114,7 @@ func parseRange(c *gin.Context) (time.Time, time.Time, bool) {
 func respondData(c *gin.Context, data interface{}, err error) {
 	if err != nil {
 		status, body := lokiStatusAndBody(err)
+		log.Printf("[Loki Error] %s %s: %v", c.Request.Method, c.Request.URL.Path, err)
 		c.JSON(status, gin.H{"error": body})
 		return
 	}
