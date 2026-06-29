@@ -1,0 +1,20 @@
+# 本地环境配置(含真实 Loki 地址,不入镜像)
+config.yaml
+
+# 构建产物
+bin/
+
+# 版本控制与编辑器/工具目录
+.git/
+.gitignore
+.claude/
+.superpowers/
+
+# 文档与说明(运行时不需要)
+docs/
+README.md
+CLAUDE.md
+AGENTS.md
+
+# 前端单测(运行时不需要)
+web/logql.test.js
