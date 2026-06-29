@@ -41,7 +41,7 @@ The layering is intentional and each boundary matters:
 
 ### Wiring (`cmd/server/main.go`)
 
-`main` is the only place templates and static assets are mounted: `r.LoadHTMLGlob("web/templates/*")` and `r.Static("/static", "./web/static")`. The `index` handler renders `"index.html"` with `{{.defaultLimit}}`. These paths are **relative to the working directory** — always run `make run` from the repo root, not from inside `cmd/server`.
+Templates and static assets are **embedded** into the binary via `go:embed` (`web/assets.go`, package `assets`, exposing `assets.FS`). `main` mounts them with `web.MountAssets(r, assets.FS)` — which parses `templates/*.html` (template name `index.html`) and serves `static/` at `/static`. The `index` handler renders `"index.html"` with `{{.defaultLimit}}`. Deployment needs only the binary + `config.yaml` — no `web/` directory on disk. (`make run`/`make build` still run from the repo root so the embed source `web/` is present at **build** time.)
 
 ## Conventions
 

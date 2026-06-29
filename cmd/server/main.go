@@ -8,6 +8,7 @@ import (
 	"log-search/internal/config"
 	"log-search/internal/loki"
 	"log-search/internal/web"
+	assets "log-search/web"
 
 	"github.com/gin-gonic/gin"
 )
@@ -30,8 +31,10 @@ func main() {
 	lc := loki.NewHTTPClient(cfg.Loki.URL, timeout)
 
 	r := gin.Default()
-	r.LoadHTMLGlob("web/templates/*")
-	r.Static("/static", "./web/static")
+	if err := web.MountAssets(r, assets.FS); err != nil {
+		slog.Error("mount embedded assets failed", "err", err)
+		os.Exit(1)
+	}
 	web.New(lc, cfg.Loki.DefaultLimit).Register(r)
 
 	slog.Info("starting log-search", "addr", cfg.Server.Addr, "loki", cfg.Loki.URL)

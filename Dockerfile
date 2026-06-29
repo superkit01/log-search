@@ -19,11 +19,8 @@ FROM alpine:3.20
 RUN apk add --no-cache ca-certificates tzdata
 
 WORKDIR /app
-# 二进制
+# 二进制(模板与静态资源已用 go:embed 编译进二进制,无需单独拷贝 web/)
 COPY --from=builder /out/log-search /app/log-search
-# 模板与静态资源:main.go 用相对路径 web/templates/* 与 ./web/static 加载,
-# 故必须与二进制放在同一工作目录(WORKDIR /app)下。
-COPY web ./web
 # 默认配置:config.yaml 被 .gitignore(含环境相关的 Loki 地址,不入库),
 # 这里用 config.example.yaml 兜底;运行时用 -v ./config.yaml:/app/config.yaml 挂真实配置覆盖。
 COPY config.example.yaml /app/config.yaml
