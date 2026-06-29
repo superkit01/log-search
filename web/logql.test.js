@@ -85,44 +85,44 @@ test("levelMatcher: debug/空/undefined/未知 → null", () => {
   assert.strictEqual(levelMatcher("bogus"), null);
 });
 
-test("levelMatcher: info → info 及以上", () => {
-  assert.strictEqual(levelMatcher("info"), 'level=~"info|warn|error"');
+test("levelMatcher: info → info 及以上(大小写不敏感)", () => {
+  assert.strictEqual(levelMatcher("info"), 'level=~"(?i)info|warn|error"');
 });
 
 test("levelMatcher: warn → warn 及以上", () => {
-  assert.strictEqual(levelMatcher("warn"), 'level=~"warn|error"');
+  assert.strictEqual(levelMatcher("warn"), 'level=~"(?i)warn|error"');
 });
 
 test("levelMatcher: error → 仅 error", () => {
-  assert.strictEqual(levelMatcher("error"), 'level=~"error"');
+  assert.strictEqual(levelMatcher("error"), 'level=~"(?i)error"');
 });
 
-test("buildLogQL: level=warn 并入流选择器作 level=~ 匹配器", () => {
+test("buildLogQL: levels=[warn] 并入流选择器作大小写不敏感 level=~ 匹配器", () => {
   assert.strictEqual(
-    buildLogQL([{ label: "app", value: "nginx" }], "", "", "warn"),
-    '{app="nginx", level=~"warn|error"}'
+    buildLogQL([{ label: "app", value: "nginx" }], "", "", ["warn"]),
+    '{app="nginx", level=~"(?i)warn"}'
   );
 });
 
-test("buildLogQL: level=debug 不加 level 匹配器", () => {
+test("buildLogQL: levels 为空数组时不加 level 匹配器", () => {
   assert.strictEqual(
-    buildLogQL([{ label: "app", value: "nginx" }], "", "", "debug"),
+    buildLogQL([{ label: "app", value: "nginx" }], "", "", []),
     '{app="nginx"}'
   );
 });
 
-test("buildLogQL: 无 chip 且 level=warn → 仅 level 选择器(合法)", () => {
-  assert.strictEqual(buildLogQL([], "", "", "warn"), '{level=~"warn|error"}');
+test("buildLogQL: 无 chip 且 levels=[warn] → 仅 level 选择器(合法)", () => {
+  assert.strictEqual(buildLogQL([], "", "", ["warn"]), '{level=~"(?i)warn"}');
 });
 
-test("buildLogQL: env+app+level+kw+trace 完整组合", () => {
+test("buildLogQL: env+app+levels+kw+trace 完整组合", () => {
   assert.strictEqual(
     buildLogQL(
       [{ label: "env", value: "prod" }, { label: "app", value: "nginx" }],
       "timeout",
       "t1",
-      "warn"
+      ["info", "warn", "error"]
     ),
-    '{env="prod", app="nginx", level=~"warn|error"} |= "timeout" | trace_id="t1"'
+    '{env="prod", app="nginx", level=~"(?i)info|warn|error"} |= "timeout" | trace_id="t1"'
   );
 });
