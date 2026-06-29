@@ -7,22 +7,23 @@ function escapeLogQLValue(v) {
   return String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
-// 级别严重度升序。level 视作 Loki 流标签(值小写 debug/info/warn/error,与 logparse 一致)。
+// 级别严重度升序。level 是 Loki 流标签(Loki 中值为大写;logparse 解析后归一为小写)。
 const LEVEL_ORDER = ["debug", "info", "warn", "error"];
 
 // levelMatcher: 入参阈值级别,返回 "该级别及以上" 的 level 标签匹配器字符串,
 // 或 null(debug/空/未知 → 不加匹配器,显示全部,含无 level 标签的流)。
-// 例: "warn" → 'level=~"warn|error"'; "info" → 'level=~"info|warn|error"'; "error" → 'level=~"error"'。
-// 匹配值是固定可信串(级别名来自常量,无用户输入),不转义。
+// 例: "warn" → 'level=~"(?i)warn|error"'; "info" → 'level=~"(?i)info|warn|error"'; "error" → 'level=~"(?i)error"'。
+// Loki 中 level 标签值为大写,故加 (?i) 做大小写不敏感匹配;匹配值是固定可信串(级别名来自常量,无用户输入),不转义。
 function levelMatcher(level) {
   const idx = LEVEL_ORDER.indexOf(level);
   if (idx <= 0) return null; // debug(0)、空(-1)、未知(-1)都不加
-  return 'level=~"' + LEVEL_ORDER.slice(idx).join("|") + '"';
+  return 'level=~"(?i)' + LEVEL_ORDER.slice(idx).join("|") + '"';
 }
 
 // buildLogQL 由筛选条件拼装 LogQL。流选择器(chips + level 匹配器)为空时返回 null,
 // 由调用方提示错误。chips: [{label, value}];重复标签折叠(后值覆盖)。
-// levels: 级别数组,如 ["info", "warn"];空数组时不加 level 匹配器。
+// levels: 级别数组(小写),如 ["info", "warn"];空数组时不加 level 匹配器。
+// Loki 中 level 标签值为大写,故匹配器加 (?i) 做大小写不敏感匹配。
 function buildLogQL(chips, keyword, traceId, levels) {
   const byLabel = {};
   const order = [];
@@ -31,7 +32,7 @@ function buildLogQL(chips, keyword, traceId, levels) {
     if (!(c.label in byLabel)) order.push(c.label);
     byLabel[c.label] = c.value;
   }
-  const lm = levels && levels.length > 0 ? 'level=~"' + levels.join("|") + '"' : null;
+  const lm = levels && levels.length > 0 ? 'level=~"(?i)' + levels.join("|") + '"' : null;
   if (order.length === 0 && !lm) return null;
   const matchers = order.map((l) => l + '="' + escapeLogQLValue(byLabel[l]) + '"');
   if (lm) matchers.push(lm);

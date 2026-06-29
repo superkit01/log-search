@@ -165,6 +165,17 @@ document.querySelectorAll(".range-group button").forEach((b) => {
 
 $("search").addEventListener("click", search);
 
+// 文本输入框失焦时裁掉首尾空白(粘贴 traceId 时常见带尾随换行),避免把空格带入查询。
+["keyword", "trace-id"].forEach((id) => {
+  $(id).addEventListener("blur", (e) => { e.target.value = e.target.value.trim(); });
+});
+
+// 在输入框(关键词/链路id/时间)内按回车即查询,与点"查询"按钮等价;
+// 仅响应 INPUT(按钮/选项卡走原生激活,避免重复触发)。
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.target.tagName === "INPUT") search();
+});
+
 async function search() {
   hideError();
   const envTab = document.querySelector("#env-tabs .env-tab.active");
@@ -235,27 +246,17 @@ function renderResults(res) {
 
     // 添加 app 标签
     if (l.labels && l.labels.app) {
-      const appTag = document.createElement("span");
-      appTag.className = "tag tag-app";
-      appTag.textContent = "app: " + l.labels.app;
-      tags.appendChild(appTag);
+      tags.appendChild(makeCopyableTag("app", l.labels.app, "tag-app"));
     }
 
     // 添加 level 标签
-    const levelTag = document.createElement("span");
-    levelTag.className = "tag tag-level";
-    levelTag.textContent = "level: " + (l.level || "info");
-    tags.appendChild(levelTag);
+    tags.appendChild(makeCopyableTag("level", l.level || "info", "tag-level"));
 
     // 添加其他标签（根据类型添加不同的CSS类）
     if (l.labels) {
       Object.entries(l.labels).forEach(([key, value]) => {
         if (key !== "app" && key !== "level") {
-          const tag = document.createElement("span");
-          const tagClass = getTagClass(key);
-          tag.className = "tag " + tagClass;
-          tag.textContent = key + ": " + value;
-          tags.appendChild(tag);
+          tags.appendChild(makeCopyableTag(key, value, getTagClass(key)));
         }
       });
     }
@@ -330,6 +331,45 @@ function toBeijingTime(isoString) {
   const milliseconds = String(beijingTime.getMilliseconds()).padStart(3, '0');
 
   return `${hours}:${minutes}:${seconds}.${milliseconds}`;
+}
+
+// makeCopyableTag 构造一个可点击复制的标签:value 写入按钮文本,key 用作 title 提示;
+// 点击时把 value 写入剪贴板,短暂显示"已复制"反馈。值转义由 textContent 保证(无 XSS)。
+function makeCopyableTag(key, value, extraClass) {
+  const tag = document.createElement("button");
+  tag.type = "button";
+  tag.className = "tag" + (extraClass ? " " + extraClass : "");
+  tag.title = "点击复制 " + key;
+  tag.textContent = key + ": " + value;
+  tag.dataset.key = key;
+  tag.dataset.value = String(value);
+  tag.addEventListener("click", () => copyText(String(value), tag));
+  return tag;
+}
+
+// copyText 把文本写入剪贴板,成功后在目标元素上短暂显示"已复制"反馈。
+async function copyText(text, target) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (e) {
+    // clipboard API 不可用(非 HTTPS/旧浏览器)时回退到 execCommand
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); } catch (_) {}
+    ta.remove();
+  }
+  if (!target) return;
+  target.classList.add("copied");
+  target.textContent = "已复制";
+  setTimeout(() => {
+    target.classList.remove("copied");
+    // 用 data-key/data-value 重建原文,避免在"已复制"回显期间被快速二次点击覆盖错
+    target.textContent = target.dataset.key + ": " + target.dataset.value;
+  }, 800);
 }
 
 // 根据标签key返回对应的CSS类
