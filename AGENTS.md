@@ -41,7 +41,7 @@ The layering is intentional and each boundary matters:
 
 ### Wiring (`cmd/server/main.go`)
 
-`main` is the only place templates and static assets are mounted: `r.LoadHTMLGlob("web/templates/*")` and `r.Static("/static", "./web/static")`. The `index` handler renders `"index.html"` with `{{.defaultLimit}}`. These paths are **relative to the working directory** — always run `make run` from the repo root, not from inside `cmd/server`.
+Templates and static assets are **embedded** into the binary via `go:embed` (`web/assets.go`, package `assets`, exposing `assets.FS`). `main` mounts them with `web.MountAssets(r, assets.FS)` — which parses `templates/*.html` (template name `index.html`) and serves `static/` at `/static`. The `index` handler renders `"index.html"` with `{{.defaultLimit}}`. Deployment needs only the binary + `config.yaml` — no `web/` directory on disk. (`make run`/`make build` still run from the repo root so the embed source `web/` is present at **build** time.)
 
 ## Conventions
 
@@ -49,6 +49,10 @@ The layering is intentional and each boundary matters:
 - `direction` defaults to `BACKWARD` and treats any non-`"FORWARD"` value as `BACKWARD` (lenient by design). `limit` is bounded 1–5000 (`maxLimit`).
 - Tests in `internal/loki` use `httptest` (real HTTP, not mocks of the client); tests in `internal/web` inject a mock `loki.Client`. The mock in `handler_test.go` must match the `loki.Client` interface signatures exactly — a signature drift compiles only there.
 - Log lines are rendered with `textContent` in the frontend (not `innerHTML`) to avoid XSS from log content.
+- **Query-form defaults & persistence** (`app.js` `loadFilters`): on first open (no `localStorage`) the form defaults to env=`test`, **all** level tabs selected, direction=`BACKWARD`, and a time range of today 00:00–23:59. Returning users get saved env/levels/direction restored from the `localStorage` key `log-search:filters`; those defaults are only fallbacks when a value is unset. There are no quick-range buttons — the only time source is the two datetime inputs, which refuse to stay empty (clearing refills today's start/end on `change`).
+- **"All levels" means no level filter.** `search()` drops the level condition entirely when every level tab is active (`levelTabs.length === allLevelTabs.length` ⇒ `levels = []`). So the default all-selected state queries all levels, not a `{level=~"..."}` selector.
+- **Tag colors are positional, not key-based** (`app.js` `TAG_PALETTE` + `style.css` `.tag-c0..c6`). `app` and `level` use fixed classes; every other label is colored by render position (cycling `tag-c0..c6`) so unknown/varying label keys across deployments always get a color. Adding a palette slot requires updating **both** the JS array and the CSS classes (dark + light).
+- **Query form is one flowing row.** All conditions (app, time group, trace-id, keyword) and the search button live in a single `.row.query-row` (`flex-wrap: wrap`); `.query-row > * { flex: 0 0 auto }` keeps each at its fixed width (app/time 190px, trace-id/keyword 500px) and wraps instead of stretching. `.controls .row` no longer sets `align-items` (defaults to `stretch`).
 
 ## Design & plan documents
 

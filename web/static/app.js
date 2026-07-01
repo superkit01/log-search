@@ -26,8 +26,6 @@ function loadTheme() {
 
 $("theme-toggle").addEventListener("click", toggleTheme);
 
-function unixNow() { return Math.floor(Date.now() / 1000); }
-
 function toLocalInput(ts) {
   const d = new Date(ts * 1000);
   d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -80,9 +78,9 @@ function saveFilters() {
   } catch (_) { /* localStorage 不可用时忽略,不阻塞查询 */ }
 }
 
-// loadFilters 从 localStorage 恢复 env、level;无记录或解析失败用默认值(env 不限、level=info)。
+// loadFilters 从 localStorage 恢复 env、level、direction;无记录或解析失败用默认值(env=test、level 全选、direction=BACKWARD)。
 function loadFilters() {
-  let env = "", levels = ["info"], direction = "";
+  let env = "", levels = ["debug", "info", "warn", "error"], direction = "";
   try {
     const raw = localStorage.getItem(FILTERS_KEY);
     if (raw) {
@@ -104,8 +102,8 @@ function loadFilters() {
     }
   });
 
-  // 设置环境选项卡active状态（默认prod）
-  const envValue = env || "prod";
+  // 设置环境选项卡active状态（默认test）
+  const envValue = env || "test";
   document.querySelectorAll("#env-tabs .env-tab").forEach(tab => {
     if (tab.dataset.value === envValue) {
       tab.classList.add("active");
@@ -152,18 +150,43 @@ document.querySelectorAll("#direction-tabs .env-tab").forEach((tab) => {
   });
 });
 
-// setRange 把起止时间设为 [end - mins, end],供快捷按钮和页面默认值共用。
-function setRange(mins) {
-  const end = unixNow();
-  $("start").value = toLocalInput(end - mins * 60);
-  $("end").value = toLocalInput(end);
+// 当天默认时间范围:开始=今天0点,结束=今天23:59(最后一分钟)。
+function defaultStartTs() {
+  const d = new Date(); d.setHours(0, 0, 0, 0); return Math.floor(d.getTime() / 1000);
+}
+function defaultEndTs() {
+  const d = new Date(); d.setHours(23, 59, 0, 0); return Math.floor(d.getTime() / 1000);
 }
 
-document.querySelectorAll(".range-group button").forEach((b) => {
-  b.addEventListener("click", () => setRange(parseInt(b.dataset.mins, 10)));
+// setDefaultRange 把起止时间设为当天默认范围,作为页面初始值。
+function setDefaultRange() {
+  $("start").value = toLocalInput(defaultStartTs());
+  $("end").value = toLocalInput(defaultEndTs());
+}
+
+// 时间输入框不允许清空:用户清空后,在 change 时恢复为当天默认值,避免提交空范围。
+["start", "end"].forEach((id) => {
+  $(id).addEventListener("change", (e) => {
+    if (!e.target.value) {
+      e.target.value = toLocalInput(id === "start" ? defaultStartTs() : defaultEndTs());
+    }
+  });
 });
 
 $("search").addEventListener("click", search);
+
+// 带清除图标的字段:有值时显示图标,点击清空并聚焦。
+// select 用 change 事件;文本输入用 input 事件,随输入实时显隐。
+function bindClear(inputId, clearId, evt) {
+  const input = $(inputId), clear = $(clearId);
+  const sync = () => { clear.hidden = !input.value; };
+  input.addEventListener(evt, sync);
+  clear.addEventListener("click", () => { input.value = ""; sync(); input.focus(); });
+  sync();
+}
+bindClear("app-select", "app-clear", "change");
+bindClear("trace-id", "trace-id-clear", "input");
+bindClear("keyword", "keyword-clear", "input");
 
 // 文本输入框失焦时裁掉首尾空白(粘贴 traceId 时常见带尾随换行),避免把空格带入查询。
 ["keyword", "trace-id"].forEach((id) => {
@@ -197,7 +220,7 @@ async function search() {
   if (!query) { showError("请至少选择环境、应用或级别"); return; }
   const start = toUnix($("start").value);
   const end = toUnix($("end").value);
-  if (!start || !end) { showError("请选择时间范围(可点快捷按钮)"); return; }
+  if (!start || !end) { showError("请选择时间范围"); return; }
   const limit = 1000;
   const directionTab = document.querySelector("#direction-tabs .env-tab.active");
   const direction = directionTab ? directionTab.dataset.value : "BACKWARD";
@@ -252,11 +275,13 @@ function renderResults(res) {
     // 添加 level 标签
     tags.appendChild(makeCopyableTag("level", l.level || "info", "tag-level"));
 
-    // 添加其他标签（根据类型添加不同的CSS类）
+    // 添加其他标签：按出现顺序从配色清单(TAG_PALETTE)依次取色,兼容不同部署的标签 key
     if (l.labels) {
+      let idx = 0;
       Object.entries(l.labels).forEach(([key, value]) => {
         if (key !== "app" && key !== "level") {
-          tags.appendChild(makeCopyableTag(key, value, getTagClass(key)));
+          tags.appendChild(makeCopyableTag(key, value, TAG_PALETTE[idx % TAG_PALETTE.length]));
+          idx++;
         }
       });
     }
@@ -372,18 +397,9 @@ async function copyText(text, target) {
   }, 800);
 }
 
-// 根据标签key返回对应的CSS类
-function getTagClass(key) {
-  const tagMap = {
-    'env': 'tag-env',
-    'region': 'tag-region',
-    'instance': 'tag-instance',
-    'host': 'tag-host',
-    'job': 'tag-instance',
-    'service': 'tag-app'
-  };
-  return tagMap[key] || '';
-}
+// 标签配色清单:渲染"其他标签"时按出现位置依次取色、循环使用。
+// 不按 key 匹配——不同系统部署的标签 key 各不相同,按位置上色可保证每个标签都有颜色且彼此区分。
+const TAG_PALETTE = ["tag-c0", "tag-c1", "tag-c2", "tag-c3", "tag-c4", "tag-c5", "tag-c6"];
 
 function renderChart(lines) {
   const levels = ["error", "warn", "info", "debug"];
@@ -421,7 +437,7 @@ function renderChart(lines) {
   });
 }
 
-setRange(60);       // 默认最近 1 小时
+setDefaultRange();  // 默认今天 00:00 ~ 23:59
 loadAppValues();    // 填充应用下拉(需先有时间范围)
 loadFilters();      // 恢复 env、level
 loadTheme();        // 恢复主题

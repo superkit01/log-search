@@ -46,19 +46,17 @@ body.light-theme .env-tab.active {
   color: #fff;
 }
 
-body.light-theme button:not(.theme-toggle):not(.env-tab) {
+body.light-theme button:not(.theme-toggle):not(.env-tab):not(.clear-icon):not(.tag) {
   background: #3a7bd5;
   color: #fff;
 }
 
-body.light-theme button:not(.theme-toggle):not(.env-tab):hover {
+body.light-theme button:not(.theme-toggle):not(.env-tab):not(.clear-icon):not(.tag):hover {
   background: #1d4ed8;
 }
 
-body.light-theme .range-group button {
-  background: #e0e0e0;
-  color: #333;
-}
+body.light-theme .clear-icon { color: #666; }
+body.light-theme .clear-icon:hover { color: #333; background: #e8e8e8; }
 
 body.light-theme .chart-wrap {
   background: #fff;
@@ -99,15 +97,24 @@ h1 { margin: 0; font-size: 18px; }
   display: block;
 }
 main { padding: 16px 20px; }
-.controls .row { display: flex; gap: 12px; align-items: flex-end; margin-bottom: 10px; flex-wrap: wrap; }
+.controls .row { display: flex; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
 label { display: flex; flex-direction: row; align-items: center; font-size: 12px; gap: 8px; color: #aaa; white-space: nowrap; }
 .lbl { width: 60px; margin-left: 10px; }
 input, select { background: #2a2a2a; color: #ddd; border: 1px solid #444; padding: 6px 8px; border-radius: 4px; font-size: 13px; }
+input { min-width: 180px; } /* 输入框最小宽度,避免两列布局下被压得过窄 */
 .logql { min-width: 480px; }
 button { background: #3a7bd5; color: #fff; border: 0; padding: 8px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; }
 button:hover { background: #2d6cc4; }
-.range-group { display: flex; align-items: center; gap: 4px; font-size: 12px; color: #aaa; }
-.range-group button { background: #333; padding: 6px 10px; }
+/* 清除图标按钮:行内小型透明按钮(应用下拉框等),仅 hover 高亮,适配深/亮主题 */
+.clear-icon { background: transparent; border: 0; color: #aaa; padding: 4px; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.clear-icon:hover { color: #ddd; background: #2a2a2a; }
+/* 带清除图标的字段容器:图标绝对定位在框内右侧、垂直居中 */
+.clear-field { position: relative; display: inline-flex; align-items: center; }
+.clear-field input { padding-right: 28px; }
+.clear-field .clear-icon { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); }
+/* select 需给原生下拉箭头留位,清除图标放在箭头左侧 */
+.clear-field-select select { padding-right: 48px; }
+.clear-field-select .clear-icon { right: 24px; }
 .error { background: #5a1d1d; color: #ffd6d6; padding: 10px 12px; border-radius: 4px; margin-bottom: 10px; }
 .chart-wrap { background: #262626; border-radius: 6px; padding: 10px; margin-bottom: 12px; height: 160px; position: relative; }
 .meta { color: #9a8; font-size: 12px; margin-bottom: 8px; }
@@ -124,10 +131,14 @@ button:hover { background: #2d6cc4; }
 .line .tag.copied { background: #10b981 !important; color: #fff !important; }
 .line .tag-app { background: linear-gradient(135deg, #3a7bd5, #00d4ff); color: #fff; }
 .line .tag-level { background: #666; color: #ddd; }
-.line .tag-env { background: #8b5cf6; color: #fff; }
-.line .tag-region { background: #ec4899; color: #fff; }
-.line .tag-instance { background: #14b8a6; color: #fff; }
-.line .tag-host { background: #f97316; color: #fff; }
+/* 标签配色清单:按位置 tag-c0..c6 循环(详见 app.js 的 TAG_PALETTE) */
+.line .tag-c0 { background: #8b5cf6; color: #fff; }
+.line .tag-c1 { background: #ec4899; color: #fff; }
+.line .tag-c2 { background: #14b8a6; color: #fff; }
+.line .tag-c3 { background: #f97316; color: #fff; }
+.line .tag-c4 { background: #22c55e; color: #fff; }
+.line .tag-c5 { background: #0ea5e9; color: #fff; }
+.line .tag-c6 { background: #6366f1; color: #fff; }
 .line .txt { white-space: pre-wrap; word-break: break-all; line-height: 1.4; color: #ddd; }
 .line .txt-wrapper { position: relative; }
 .line .txt-wrapper.collapsed .txt-full { display: none; }
@@ -184,10 +195,19 @@ body.light-theme .line .ts-time { color: #d97706; }
 body.light-theme .line .tag { background: #e8e8e8; color: #666; }
 body.light-theme .line .tag.copied { background: #10b981 !important; color: #fff !important; }
 body.light-theme .line .tag-app { background: linear-gradient(135deg, #3a7bd5, #00d4ff); color: #fff; }
-body.light-theme .line .tag-env { background: #7c3aed; color: #fff; }
-body.light-theme .line .tag-region { background: #db2777; color: #fff; }
-body.light-theme .line .tag-instance { background: #0d9488; color: #fff; }
-body.light-theme .line .tag-host { background: #ea580c; color: #fff; }
+body.light-theme .line .tag-c0 { background: #7c3aed; color: #fff; }
+body.light-theme .line .tag-c1 { background: #db2777; color: #fff; }
+body.light-theme .line .tag-c2 { background: #0d9488; color: #fff; }
+body.light-theme .line .tag-c3 { background: #ea580c; color: #fff; }
+body.light-theme .line .tag-c4 { background: #16a34a; color: #fff; }
+body.light-theme .line .tag-c5 { background: #0284c7; color: #fff; }
+body.light-theme .line .tag-c6 { background: #4f46e5; color: #fff; }
+/* level 标签:亮色主题下按级别上色(与暗色一致,用更深的色阶保证浅底对比) */
+body.light-theme .line .tag-level { background: #6b7280; color: #fff; }
+body.light-theme .lvl-info .tag-level { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; }
+body.light-theme .lvl-error .tag-level { background: linear-gradient(135deg, #dc2626, #b91c1c); color: #fff; }
+body.light-theme .lvl-warn .tag-level { background: linear-gradient(135deg, #d97706, #b45309); color: #fff; }
+body.light-theme .lvl-debug .tag-level { background: linear-gradient(135deg, #6b7280, #4b5563); color: #fff; }
 body.light-theme .line .txt { color: #333; }
 body.light-theme .line .txt-toggle { color: #0366d6; }
 body.light-theme .line .txt-toggle:hover { color: #1d4ed8; }
@@ -240,15 +260,22 @@ body.light-theme .line .txt-wrapper.collapsed .txt-preview::after {
   color: #fff;
 }
 
-/* 全宽输入框 */
-label.full-width {
-  flex: 1;
-  width: 100%;
+/* 查询条件流式布局:同一行内依次排列、排不下自动换行;各项保持自身固定宽度,不拉伸不压缩 */
+.query-row > * { flex: 0 0 auto; }
+
+/* 时间查询条件:开始/结束固定宽度并排,合为一组 */
+.time-field {
+  display: flex;
   flex-direction: row;
   align-items: center;
   gap: 8px;
+  font-size: 12px;
+  color: #aaa;
 }
+.time-inputs { display: inline-flex; align-items: center; gap: 6px; }
+.time-inputs input { width: 190px; min-width: 190px; }
+.time-sep { color: #888; }
 
-label.full-width input {
-  width: 100%;
-}
+/* 输入框固定宽度:应用/时间 190px;链路/关键词 500px */
+#app-select { width: 190px; }
+#trace-id, #keyword { width: 500px; }
