@@ -73,6 +73,50 @@ loki:
 	}
 }
 
+func TestLoad_EnvExpansion_Override(t *testing.T) {
+	// ${LOKI_URL:-default}:env 设了且非空时取 env
+	t.Setenv("LOKI_URL", "http://from-env:3100")
+	p := writeTempYAML(t, `
+loki:
+  url: ${LOKI_URL:-http://default:3100}
+`)
+	c, err := Load(p)
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if c.Loki.URL != "http://from-env:3100" {
+		t.Errorf("url = %q, want env override http://from-env:3100", c.Loki.URL)
+	}
+}
+
+func TestLoad_EnvExpansion_DefaultWhenUnset(t *testing.T) {
+	// env 未设/为空时回落到 :- 后的默认值
+	t.Setenv("LOKI_URL", "")
+	p := writeTempYAML(t, `
+loki:
+  url: ${LOKI_URL:-http://default:3100}
+`)
+	c, err := Load(p)
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if c.Loki.URL != "http://default:3100" {
+		t.Errorf("url = %q, want default http://default:3100", c.Loki.URL)
+	}
+}
+
+func TestLoad_EnvExpansion_StillValidated(t *testing.T) {
+	// 展开后的值仍走 validate():非法值报错
+	t.Setenv("LOKI_URL", "not-a-url")
+	p := writeTempYAML(t, `
+loki:
+  url: ${LOKI_URL:-http://default:3100}
+`)
+	if _, err := Load(p); err == nil {
+		t.Fatal("expected validation error for invalid LOKI_URL env, got nil")
+	}
+}
+
 func TestLoad_AppliesDefaults(t *testing.T) {
 	p := writeTempYAML(t, `
 loki:
@@ -95,10 +139,10 @@ loki:
 
 func TestLoad_URL_MalformedFails(t *testing.T) {
 	tests := []struct {
-		name     string
-		url      string
-		wantErr  bool
-		errMsg   string
+		name    string
+		url     string
+		wantErr bool
+		errMsg  string
 	}{
 		{
 			name:    "valid https URL",

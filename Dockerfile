@@ -22,7 +22,10 @@ WORKDIR /app
 # 二进制(模板与静态资源已用 go:embed 编译进二进制,无需单独拷贝 web/)
 COPY --from=builder /out/log-search /app/log-search
 # 默认配置:config.yaml 被 .gitignore(含环境相关的 Loki 地址,不入库),
-# 这里用 config.example.yaml 兜底;运行时用 -v ./config.yaml:/app/config.yaml 挂真实配置覆盖。
+# 这里用 config.example.yaml 兜底,其内已用 ${VAR:-default} 占位。
+# 运行时覆盖(推荐,任选其一):
+#   -e LOKI_URL=http://loki:3100                       (内置 config 会展开该 env)
+#   -v ./config.yaml:/app/config.yaml                  (挂载完整配置文件)
 COPY config.example.yaml /app/config.yaml
 
 # 非 root 运行

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"regexp"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -34,6 +36,8 @@ func Load(path string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read config %s: %w", path, err)
 	}
+	// 在 YAML 解析前做 ${VAR} / ${VAR:-default} 文本级展开(便于容器化)。
+	b = []byte(expandEnv(string(b)))
 	var c Config
 	if err := yaml.Unmarshal(b, &c); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
@@ -42,6 +46,28 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 	return &c, nil
+}
+
+// envRe 匹配 ${VAR} 与 ${VAR:-default}。
+var envRe = regexp.MustCompile(`\$\{([^}:]+)(?::-([^}]*))?\}`)
+
+// expandEnv 展开字符串中的 ${VAR} 与 ${VAR:-default}(bash/docker-compose 风格)。
+//
+//	${VAR}      → VAR 的值(未设/为空 → 空串)
+//	${VAR:-x}   → VAR 已设且非空时取其值,否则取 x
+//
+// 不含 "${" 的串直接返回(快速路径)。
+func expandEnv(s string) string {
+	if !strings.Contains(s, "${") {
+		return s
+	}
+	return envRe.ReplaceAllStringFunc(s, func(m string) string {
+		parts := envRe.FindStringSubmatch(m)
+		if v := os.Getenv(parts[1]); v != "" {
+			return v
+		}
+		return parts[2]
+	})
 }
 
 func (c *Config) validate() error {
