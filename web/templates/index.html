@@ -46,26 +46,48 @@
           <button class="env-tab" data-value="prod">生产</button>
         </div>
       </div>
-      <div class="row">
+      <div class="row query-row">
         <label><span class="lbl">应用</span>
-          <select id="app-select"><option value="">不限</option></select>
+          <span class="clear-field clear-field-select">
+            <select id="app-select"><option value="">不限</option></select>
+            <button type="button" id="app-clear" class="clear-icon" title="清除应用筛选" aria-label="清除应用筛选" hidden>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+              </svg>
+            </button>
+          </span>
         </label>
-      </div>
-      <div class="row">
-        <label class="full-width"><span class="lbl">链路id</span><input type="text" id="trace-id" placeholder="TraceId"></label>
-      </div>
-      <div class="row">
-        <label class="full-width"><span class="lbl">关键词</span><input type="text" id="keyword" placeholder="匹配日志文本,如 error"></label>
-      </div>
-      <div class="row">
-        <span class="range-group">快捷:
-          <button type="button" data-mins="15">15m</button>
-          <button type="button" data-mins="60">1h</button>
-          <button type="button" data-mins="360">6h</button>
-          <button type="button" data-mins="1440">24h</button>
-        </span>
-        <label><span class="lbl">开始时间</span> <input type="datetime-local" id="start"></label>
-        <label><span class="lbl">结束时间</span> <input type="datetime-local" id="end"></label>
+        <div class="time-field">
+          <span class="lbl">时间</span>
+          <span class="time-inputs">
+            <input type="datetime-local" id="start" title="开始时间">
+            <span class="time-sep">~</span>
+            <input type="datetime-local" id="end" title="结束时间">
+          </span>
+        </div>
+        <label><span class="lbl">链路id</span>
+          <span class="clear-field">
+            <input type="text" id="trace-id" placeholder="TraceId">
+            <button type="button" id="trace-id-clear" class="clear-icon" title="清除" aria-label="清除链路id" hidden>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+              </svg>
+            </button>
+          </span>
+        </label>
+        <label><span class="lbl">关键词</span>
+          <span class="clear-field">
+            <input type="text" id="keyword" placeholder="匹配日志文本,如 error">
+            <button type="button" id="keyword-clear" class="clear-icon" title="清除" aria-label="清除关键词" hidden>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+              </svg>
+            </button>
+          </span>
+        </label>
         <button type="button" id="search">查询</button>
       </div>
     </section>
