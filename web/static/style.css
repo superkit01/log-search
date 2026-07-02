@@ -1,5 +1,5 @@
 * { box-sizing: border-box; }
-body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #1e1e1e; color: #ddd; transition: background 0.3s, color 0.3s; color-scheme: dark; }
+body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #1e1e1e; color: #ddd; transition: background 0.3s, color 0.3s; color-scheme: dark; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 
 /* 亮色主题 */
 body.light-theme {
@@ -71,7 +71,7 @@ body.light-theme .lvl-info .txt { color: #0366d6; }
 body.light-theme .lvl-error .txt { color: #d73a49; }
 body.light-theme .lvl-warn .txt { color: #f66a0a; }
 body.light-theme .lvl-debug .txt { color: #6a737d; }
-header { padding: 12px 20px; background: #111; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
+header { padding: 12px 20px; background: #111; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; flex: 0 0 auto; }
 h1 { margin: 0; font-size: 18px; }
 
 /* 主题切换按钮 */
@@ -96,10 +96,13 @@ h1 { margin: 0; font-size: 18px; }
 .theme-icon-light {
   display: block;
 }
-main { padding: 16px 20px; }
+main { padding: 16px 20px; flex: 1; display: flex; flex-direction: column; min-height: 0; }
+/* 顶部查询区固定,仅结果/图表区滚动 */
+.controls { flex: 0 0 auto; }
+.scroll-area { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
 .controls .row { display: flex; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
 label { display: flex; flex-direction: row; align-items: center; font-size: 12px; gap: 8px; color: #aaa; white-space: nowrap; }
-.lbl { width: 60px; margin-left: 10px; }
+.lbl { margin-left: 10px; }
 input, select { background: #2a2a2a; color: #ddd; border: 1px solid #444; padding: 6px 8px; border-radius: 4px; font-size: 13px; }
 input { min-width: 180px; } /* 输入框最小宽度,避免两列布局下被压得过窄 */
 .logql { min-width: 480px; }
