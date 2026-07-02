@@ -10,6 +10,7 @@ func TestFS_HasAssets(t *testing.T) {
 		"static/app.js",
 		"static/style.css",
 		"static/logql.js",
+		"static/share.js",
 	} {
 		if _, err := FS.ReadFile(p); err != nil {
 			t.Errorf("embedded asset missing: %s: %v", p, err)

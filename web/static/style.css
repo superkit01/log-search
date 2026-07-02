@@ -74,7 +74,13 @@ body.light-theme .lvl-debug .txt { color: #6a737d; }
 header { padding: 12px 20px; background: #111; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; flex: 0 0 auto; }
 h1 { margin: 0; font-size: 18px; }
 
-/* 主题切换按钮 */
+/* 头部图标按钮 */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .theme-toggle {
   background: transparent;
   color: #ddd;
@@ -93,7 +99,9 @@ h1 { margin: 0; font-size: 18px; }
 }
 
 .theme-icon-dark,
-.theme-icon-light {
+.theme-icon-light,
+.share-icon-copy,
+.share-icon-check {
   display: block;
 }
 main { padding: 16px 20px; flex: 1; display: flex; flex-direction: column; min-height: 0; }
@@ -119,6 +127,7 @@ button:hover { background: #2d6cc4; }
 .clear-field-select select { padding-right: 48px; }
 .clear-field-select .clear-icon { right: 24px; }
 .error { background: #5a1d1d; color: #ffd6d6; padding: 10px 12px; border-radius: 4px; margin-bottom: 10px; }
+.error.info { background: #164e63; color: #cffafe; }
 .chart-wrap { background: #262626; border-radius: 6px; padding: 10px; margin-bottom: 12px; height: 160px; position: relative; }
 .meta { color: #9a8; font-size: 12px; margin-bottom: 8px; }
 .results { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; }

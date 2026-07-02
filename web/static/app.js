@@ -44,7 +44,8 @@ async function api(path) {
   return j;
 }
 
-function showError(msg) { const b = $("error-bar"); b.textContent = msg; b.hidden = false; }
+function showError(msg) { const b = $("error-bar"); b.classList.remove("info"); b.textContent = msg; b.hidden = false; }
+function showInfo(msg) { const b = $("error-bar"); b.classList.add("info"); b.textContent = msg; b.hidden = false; }
 function hideError() { $("error-bar").hidden = true; }
 
 // loadAppValues 用当前时间范围拉取 app 标签的值列表,填充应用下拉框(保留首个"不限")。
@@ -54,6 +55,7 @@ async function loadAppValues() {
   try {
     const j = await api("/api/label/app/values?start=" + start + "&end=" + end);
     const sel = $("app-select");
+    const selected = sel.value;
     const blank = sel.querySelector('option[value=""]');
     sel.replaceChildren(blank);
     (j.data || []).forEach((v) => {
@@ -61,6 +63,7 @@ async function loadAppValues() {
       o.value = v; o.textContent = v;
       sel.appendChild(o);
     });
+    if (selected) setSelectValue(sel, selected);
   } catch (e) { showError(e.message); }
 }
 
@@ -91,31 +94,21 @@ function loadFilters() {
     }
   } catch (_) { /* 解析失败用默认值 */ }
 
-  // 清除所有选项卡的active类
-  document.querySelectorAll(".env-tab").forEach(tab => tab.classList.remove("active"));
+  setActiveLevels(levels);
+  setActiveTabValue("env-tabs", env || "test");
+  setActiveTabValue("direction-tabs", direction || "BACKWARD");
+}
 
-  // 设置级别选项卡active状态（支持多选）
-  const levelsSet = new Set(levels);
+function setActiveTabValue(id, value) {
+  document.querySelectorAll("#" + id + " .env-tab").forEach(tab => {
+    tab.classList.toggle("active", !!value && tab.dataset.value === value);
+  });
+}
+
+function setActiveLevels(levels) {
+  const selected = levels && levels.length > 0 ? new Set(levels) : null;
   document.querySelectorAll("#level-tabs .env-tab").forEach(tab => {
-    if (levelsSet.has(tab.dataset.value)) {
-      tab.classList.add("active");
-    }
-  });
-
-  // 设置环境选项卡active状态（默认test）
-  const envValue = env || "test";
-  document.querySelectorAll("#env-tabs .env-tab").forEach(tab => {
-    if (tab.dataset.value === envValue) {
-      tab.classList.add("active");
-    }
-  });
-
-  // 设置方向选项卡active状态（默认BACKWARD）
-  const directionValue = direction || "BACKWARD";
-  document.querySelectorAll("#direction-tabs .env-tab").forEach(tab => {
-    if (tab.dataset.value === directionValue) {
-      tab.classList.add("active");
-    }
+    tab.classList.toggle("active", !selected || selected.has(tab.dataset.value));
   });
 }
 
@@ -174,19 +167,26 @@ function setDefaultRange() {
 });
 
 $("search").addEventListener("click", search);
+$("share").addEventListener("click", shareCurrentQuery);
 
 // 带清除图标的字段:有值时显示图标,点击清空并聚焦。
 // select 用 change 事件;文本输入用 input 事件,随输入实时显隐。
+const clearSyncers = [];
 function bindClear(inputId, clearId, evt) {
   const input = $(inputId), clear = $(clearId);
   const sync = () => { clear.hidden = !input.value; };
   input.addEventListener(evt, sync);
   clear.addEventListener("click", () => { input.value = ""; sync(); input.focus(); });
   sync();
+  clearSyncers.push(sync);
 }
 bindClear("app-select", "app-clear", "change");
 bindClear("trace-id", "trace-id-clear", "input");
 bindClear("keyword", "keyword-clear", "input");
+
+function syncClearButtons() {
+  clearSyncers.forEach((sync) => sync());
+}
 
 // 文本输入框失焦时裁掉首尾空白(粘贴 traceId 时常见带尾随换行),避免把空格带入查询。
 ["keyword", "trace-id"].forEach((id) => {
@@ -199,18 +199,87 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && e.target.tagName === "INPUT") search();
 });
 
-async function search() {
-  hideError();
+function activeTabValue(id) {
+  const tab = document.querySelector("#" + id + " .env-tab.active");
+  return tab ? tab.dataset.value : "";
+}
+
+function activeLevelValues() {
+  return Array.from(document.querySelectorAll("#level-tabs .env-tab.active")).map(t => t.dataset.value);
+}
+
+function queryLevels() {
+  const levels = activeLevelValues();
+  const allLevelTabs = document.querySelectorAll("#level-tabs .env-tab");
+  return levels.length === allLevelTabs.length ? [] : levels;
+}
+
+function currentShareState() {
+  const levels = queryLevels();
+  return {
+    env: activeTabValue("env-tabs"),
+    app: $("app-select").value,
+    levels,
+    direction: activeTabValue("direction-tabs") || "BACKWARD",
+    keyword: $("keyword").value.trim(),
+    traceId: $("trace-id").value.trim(),
+    start: toUnix($("start").value),
+    end: toUnix($("end").value),
+  };
+}
+
+function applyShareState(state) {
+  if (state.start) $("start").value = toLocalInput(state.start);
+  if (state.end) $("end").value = toLocalInput(state.end);
+  $("keyword").value = state.keyword || "";
+  $("trace-id").value = state.traceId || "";
+  setActiveTabValue("env-tabs", state.env || "");
+  setActiveLevels(state.levels || []);
+  if (state.direction) setActiveTabValue("direction-tabs", state.direction);
+}
+
+function setSelectValue(sel, value) {
+  if (!value) { sel.value = ""; return; }
+  if (!Array.from(sel.options).some((o) => o.value === value)) {
+    const o = document.createElement("option");
+    o.value = value; o.textContent = value;
+    sel.appendChild(o);
+  }
+  sel.value = value;
+}
+
+async function shareCurrentQuery() {
+  const qs = encodeShareState(currentShareState());
+  const url = window.location.origin + window.location.pathname + (qs ? "?" + qs : "");
+  const copied = await copyText(url);
+  setShareCopied(copied);
+  if (!copied) showInfo("分享链接: " + url);
+}
+
+function setShareCopied(copied) {
+  const copyIcon = document.querySelector(".share-icon-copy");
+  const checkIcon = document.querySelector(".share-icon-check");
+  const shareButton = $("share");
+  if (!copyIcon || !checkIcon || !shareButton) return;
+  copyIcon.style.display = copied ? "none" : "block";
+  checkIcon.style.display = copied ? "block" : "none";
+  shareButton.title = copied ? "已复制" : "复制分享链接";
+  shareButton.setAttribute("aria-label", shareButton.title);
+  if (!copied) return;
+  setTimeout(() => {
+    copyIcon.style.display = "block";
+    checkIcon.style.display = "none";
+    shareButton.title = "复制分享链接";
+    shareButton.setAttribute("aria-label", shareButton.title);
+  }, 1600);
+}
+
+async function search(options) {
+  if (!options || !options.keepMessage) hideError();
   const envTab = document.querySelector("#env-tabs .env-tab.active");
   const env = envTab ? envTab.dataset.value : "";
   const app = $("app-select").value;
-  const levelTabs = document.querySelectorAll("#level-tabs .env-tab.active");
-  const allLevelTabs = document.querySelectorAll("#level-tabs .env-tab");
-  let levels = Array.from(levelTabs).map(t => t.dataset.value);
-  // 如果全部选中，去掉level过滤条件
-  if (levelTabs.length === allLevelTabs.length) {
-    levels = [];
-  }
+  const levels = queryLevels();
   const chips = [];
   if (env) chips.push({ label: "env", value: env });
   if (app) chips.push({ label: "app", value: app });
@@ -222,8 +291,7 @@ async function search() {
   const end = toUnix($("end").value);
   if (!start || !end) { showError("请选择时间范围"); return; }
   const limit = 1000;
-  const directionTab = document.querySelector("#direction-tabs .env-tab.active");
-  const direction = directionTab ? directionTab.dataset.value : "BACKWARD";
+  const direction = activeTabValue("direction-tabs") || "BACKWARD";
   const url = "/api/query_range?query=" + encodeURIComponent(query) +
     "&start=" + start + "&end=" + end + "&limit=" + limit + "&direction=" + direction;
   try {
@@ -374,8 +442,10 @@ function makeCopyableTag(key, value, extraClass) {
 
 // copyText 把文本写入剪贴板,成功后在目标元素上短暂显示"已复制"反馈。
 async function copyText(text, target) {
+  let copied = false;
   try {
     await navigator.clipboard.writeText(text);
+    copied = true;
   } catch (e) {
     // clipboard API 不可用(非 HTTPS/旧浏览器)时回退到 execCommand
     const ta = document.createElement("textarea");
@@ -384,10 +454,11 @@ async function copyText(text, target) {
     ta.style.opacity = "0";
     document.body.appendChild(ta);
     ta.select();
-    try { document.execCommand("copy"); } catch (_) {}
+    try { copied = document.execCommand("copy"); } catch (_) {}
     ta.remove();
   }
-  if (!target) return;
+  if (!target) return copied;
+  if (!copied) return false;
   target.classList.add("copied");
   target.textContent = "已复制";
   setTimeout(() => {
@@ -395,6 +466,7 @@ async function copyText(text, target) {
     // 用 data-key/data-value 重建原文,避免在"已复制"回显期间被快速二次点击覆盖错
     target.textContent = target.dataset.key + ": " + target.dataset.value;
   }, 800);
+  return true;
 }
 
 // 标签配色清单:渲染"其他标签"时按出现位置依次取色、循环使用。
@@ -437,7 +509,19 @@ function renderChart(lines) {
   });
 }
 
-setDefaultRange();  // 默认今天 00:00 ~ 23:59
-loadAppValues();    // 填充应用下拉(需先有时间范围)
-loadFilters();      // 恢复 env、level
-loadTheme();        // 恢复主题
+async function init() {
+  setDefaultRange();  // 默认今天 00:00 ~ 23:59
+  loadFilters();      // 恢复 env、level
+  loadTheme();        // 恢复主题
+
+  const shared = decodeShareState(window.location.search);
+  if (shared) applyShareState(shared);
+  await loadAppValues(); // 填充应用下拉(需先有时间范围)
+  if (shared) {
+    setSelectValue($("app-select"), shared.app || "");
+    syncClearButtons();
+    await search({ keepMessage: true });
+  }
+}
+
+init();
