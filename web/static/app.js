@@ -1,7 +1,12 @@
 const $ = (id) => document.getElementById(id);
 let chart;
+let currentLines = [];
+let nextCursor = "";
+let lastQueryURL = "";
+let isLoadingMore = false;
 const FILTERS_KEY = "log-search:filters"; // localStorage 键:存 {env, level}
 const THEME_KEY = "log-search:theme"; // localStorage 键:存主题
+const QUERY_LIMIT = 500;
 
 // 主题切换
 function toggleTheme() {
@@ -168,6 +173,7 @@ function setDefaultRange() {
 
 $("search").addEventListener("click", search);
 $("share").addEventListener("click", shareCurrentQuery);
+$("scroll-area").addEventListener("scroll", onResultsScroll);
 
 // 带清除图标的字段:有值时显示图标,点击清空并聚焦。
 // select 用 change 事件;文本输入用 input 事件,随输入实时显隐。
@@ -276,6 +282,9 @@ function setShareCopied(copied) {
 
 async function search(options) {
   if (!options || !options.keepMessage) hideError();
+  currentLines = [];
+  nextCursor = "";
+  isLoadingMore = false;
   const envTab = document.querySelector("#env-tabs .env-tab.active");
   const env = envTab ? envTab.dataset.value : "";
   const app = $("app-select").value;
@@ -290,28 +299,68 @@ async function search(options) {
   const start = toUnix($("start").value);
   const end = toUnix($("end").value);
   if (!start || !end) { showError("请选择时间范围"); return; }
-  const limit = 1000;
+  const limit = QUERY_LIMIT;
   const direction = activeTabValue("direction-tabs") || "BACKWARD";
   const url = "/api/query_range?query=" + encodeURIComponent(query) +
     "&start=" + start + "&end=" + end + "&limit=" + limit + "&direction=" + direction;
+  lastQueryURL = url;
   try {
     const j = await api(url);
-    renderResults(j);
-    renderChart(j.lines || []);
+    applyQueryResult(j, false);
   } catch (e) {
     showError(e.message);
   }
 }
 
-function renderResults(res) {
-  const box = $("results");
+async function loadMore() {
+  if (!lastQueryURL || !nextCursor || isLoadingMore) return;
+  hideError();
+  isLoadingMore = true;
+  try {
+    const sep = lastQueryURL.includes("?") ? "&" : "?";
+    const j = await api(lastQueryURL + sep + "cursor=" + encodeURIComponent(nextCursor));
+    applyQueryResult(j, true);
+  } catch (e) {
+    showError(e.message);
+  } finally {
+    isLoadingMore = false;
+    scheduleAutoLoadCheck();
+  }
+}
+
+function onResultsScroll(e) {
+  if (shouldAutoLoadMore(e.currentTarget, !!nextCursor, isLoadingMore)) {
+    loadMore();
+  }
+}
+
+function scheduleAutoLoadCheck() {
+  requestAnimationFrame(() => onResultsScroll({ currentTarget: $("scroll-area") }));
+}
+
+function applyQueryResult(res, append) {
   const lines = res.lines || [];
-  box.replaceChildren();
-  const meta = document.createElement("div");
-  meta.className = "meta";
-  meta.textContent = "返回 " + lines.length + " 行(总计 " + res.total + ")";
-  box.appendChild(meta);
-  lines.forEach((l) => {
+  currentLines = append ? currentLines.concat(lines) : lines.slice();
+  nextCursor = res.nextCursor || "";
+  renderResults(currentLines, lines, append);
+  renderChart(currentLines);
+  if (lines.length < QUERY_LIMIT) nextCursor = "";
+  scheduleAutoLoadCheck();
+}
+
+function renderResults(allLines, pageLines, append) {
+  const box = $("results");
+  if (!append) {
+    box.replaceChildren();
+  }
+  let meta = box.querySelector(".meta");
+  if (!meta) {
+    meta = document.createElement("div");
+    meta.className = "meta";
+    box.appendChild(meta);
+  }
+  meta.textContent = "已加载 " + allLines.length + " 行";
+  pageLines.forEach((l) => {
     const row = document.createElement("div");
     row.className = "line lvl-" + (l.level || "info");
 

@@ -15,8 +15,9 @@ type Line struct {
 
 // QueryResult 是范围查询的聚合结果。
 type QueryResult struct {
-	Lines []Line `json:"lines"`
-	Total int    `json:"total"`
+	Lines      []Line `json:"lines"`
+	Total      int    `json:"total"`
+	NextCursor string `json:"nextCursor,omitempty"`
 }
 
 // Direction 是查询方向。

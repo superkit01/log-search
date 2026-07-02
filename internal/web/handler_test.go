@@ -19,6 +19,10 @@ type mockLoki struct {
 	labelValues []string
 	result      *loki.QueryResult
 	err         error
+	lastStart   time.Time
+	lastEnd     time.Time
+	lastLimit   int
+	lastDir     loki.Direction
 }
 
 func (m *mockLoki) Labels(ctx context.Context, start, end time.Time) ([]string, error) {
@@ -28,6 +32,10 @@ func (m *mockLoki) LabelValues(ctx context.Context, name string, start, end time
 	return m.labelValues, m.err
 }
 func (m *mockLoki) QueryRange(ctx context.Context, query string, start, end time.Time, limit int, direction loki.Direction) (*loki.QueryResult, error) {
+	m.lastStart = start
+	m.lastEnd = end
+	m.lastLimit = limit
+	m.lastDir = direction
 	return m.result, m.err
 }
 
@@ -57,6 +65,60 @@ func TestQueryRange_OK_FillsLevel(t *testing.T) {
 	}
 	if len(res.Lines) != 1 || res.Lines[0].Level != "error" {
 		t.Errorf("unexpected result: %+v", res)
+	}
+}
+
+func TestQueryRange_CursorBackward_AdjustsEndAndReturnsNextCursor(t *testing.T) {
+	last := time.Unix(0, 1234567890).UTC()
+	m := &mockLoki{result: &loki.QueryResult{
+		Lines: []loki.Line{
+			{Time: time.Unix(0, 2234567890).UTC(), Raw: "info newest"},
+			{Time: last, Raw: "info oldest"},
+		},
+		Total: 2,
+	}}
+	r := setupRouter(m)
+	req := httptest.NewRequest(http.MethodGet, "/api/query_range?query=x&start=1&end=99999&limit=10&direction=BACKWARD&cursor=5000000000", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
+	}
+	if got, want := m.lastEnd.UnixNano(), int64(4999999999); got != want {
+		t.Fatalf("end ns = %d, want %d", got, want)
+	}
+	var res loki.QueryResult
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if res.NextCursor != "1234567890" {
+		t.Fatalf("nextCursor = %q, want 1234567890", res.NextCursor)
+	}
+}
+
+func TestQueryRange_CursorForward_AdjustsStart(t *testing.T) {
+	m := &mockLoki{result: &loki.QueryResult{}}
+	r := setupRouter(m)
+	req := httptest.NewRequest(http.MethodGet, "/api/query_range?query=x&start=1&end=99999&direction=FORWARD&cursor=5000000000", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
+	}
+	if got, want := m.lastStart.UnixNano(), int64(5000000001); got != want {
+		t.Fatalf("start ns = %d, want %d", got, want)
+	}
+}
+
+func TestQueryRange_BadCursor(t *testing.T) {
+	r := setupRouter(&mockLoki{})
+	req := httptest.NewRequest(http.MethodGet, "/api/query_range?query=x&start=1&end=99999&cursor=abc", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", w.Code)
 	}
 }
 

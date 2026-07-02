@@ -80,6 +80,22 @@ func (h *Handler) queryRange(c *gin.Context) {
 	if c.Query("direction") == string(loki.Forward) {
 		direction = loki.Forward
 	}
+	if s := c.Query("cursor"); s != "" {
+		ns, err := strconv.ParseInt(s, 10, 64)
+		if err != nil || ns <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "cursor must be a positive unix nanosecond timestamp"})
+			return
+		}
+		if direction == loki.Forward {
+			start = time.Unix(0, ns+1)
+		} else {
+			end = time.Unix(0, ns-1)
+		}
+		if !end.After(start) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "cursor leaves no remaining time range"})
+			return
+		}
+	}
 	res, err := h.Loki.QueryRange(c.Request.Context(), query, start, end, limit, direction)
 	if err != nil {
 		status, body := lokiStatusAndBody(err)
@@ -89,6 +105,9 @@ func (h *Handler) queryRange(c *gin.Context) {
 	}
 	for i := range res.Lines {
 		res.Lines[i].Level = string(logparse.DetectLevel(res.Lines[i].Raw))
+	}
+	if len(res.Lines) > 0 {
+		res.NextCursor = strconv.FormatInt(res.Lines[len(res.Lines)-1].Time.UnixNano(), 10)
 	}
 	c.JSON(http.StatusOK, res)
 }
