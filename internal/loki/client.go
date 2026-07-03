@@ -77,14 +77,21 @@ func (c *httpClient) QueryRange(ctx context.Context, query string, start, end ti
 	res := &QueryResult{}
 	for _, s := range qr.Result {
 		for _, v := range s.Values {
-			ns, err := strconv.ParseInt(v[0], 10, 64)
+			ns, err := strconv.ParseInt(v.Timestamp, 10, 64)
 			if err != nil {
 				continue
 			}
+			labels := make(map[string]string, len(s.Stream)+len(v.Metadata))
+			for k, val := range s.Stream {
+				labels[k] = val
+			}
+			for k, val := range v.Metadata {
+				labels[k] = val
+			}
 			res.Lines = append(res.Lines, Line{
 				Time:   time.Unix(0, ns).UTC(),
-				Raw:    v[1],
-				Labels: s.Stream,
+				Raw:    v.Line,
+				Labels: labels,
 			})
 		}
 	}

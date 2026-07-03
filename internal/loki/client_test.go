@@ -56,6 +56,31 @@ func TestQueryRange_ParsesStreams(t *testing.T) {
 	}
 }
 
+func TestQueryRange_MergesStructuredMetadataIntoLabels(t *testing.T) {
+	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{
+		  "status":"success",
+		  "data":{
+		    "resultType":"streams",
+		    "result":[{
+		      "stream":{"env":"test","app":"alarm"},
+		      "values":[["1609459200000000000","started",{"trace_id":"tid-1","span_id":"span-1"}]]
+		    }]
+		  }
+		}`)
+	})
+	res, err := c.QueryRange(context.Background(), `{app="alarm"}`, time.Unix(0, 0), time.Unix(0, 0).Add(time.Hour), 100, Backward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := res.Lines[0].Labels["trace_id"]; got != "tid-1" {
+		t.Fatalf("trace_id label = %q, want tid-1; labels=%v", got, res.Lines[0].Labels)
+	}
+	if got := res.Lines[0].Labels["app"]; got != "alarm" {
+		t.Fatalf("app label = %q, want alarm; labels=%v", got, res.Lines[0].Labels)
+	}
+}
+
 // TestQueryRange_SortsAcrossStreams verifies the global time merge: Loki returns
 // lines grouped per stream, but the client must flatten them into a single
 // chronologically-ordered list. FORWARD = oldest first, BACKWARD = newest first.

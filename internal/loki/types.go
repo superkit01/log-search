@@ -39,7 +39,33 @@ type apiResponse struct {
 
 type stream struct {
 	Stream map[string]string `json:"stream"`
-	Values [][2]string       `json:"values"` // [unixNanoString, line]
+	Values []logEntry        `json:"values"` // [unixNanoString, line, optional structured metadata]
+}
+
+type logEntry struct {
+	Timestamp string
+	Line      string
+	Metadata  map[string]string
+}
+
+func (e *logEntry) UnmarshalJSON(b []byte) error {
+	var parts []json.RawMessage
+	if err := json.Unmarshal(b, &parts); err != nil {
+		return err
+	}
+	if len(parts) < 2 {
+		return nil
+	}
+	if err := json.Unmarshal(parts[0], &e.Timestamp); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(parts[1], &e.Line); err != nil {
+		return err
+	}
+	if len(parts) > 2 {
+		_ = json.Unmarshal(parts[2], &e.Metadata)
+	}
+	return nil
 }
 
 // queryRangeResponse 对应 Loki /query_range 的 data 字段:流数组在 result 里,

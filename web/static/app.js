@@ -397,7 +397,7 @@ function renderResults(allLines, pageLines, append) {
       let idx = 0;
       Object.entries(l.labels).forEach(([key, value]) => {
         if (key !== "app" && key !== "level") {
-          tags.appendChild(makeCopyableTag(key, value, TAG_PALETTE[idx % TAG_PALETTE.length]));
+          tags.appendChild(makeCopyableTag(key, value, TAG_PALETTE[idx % TAG_PALETTE.length], l));
           idx++;
         }
       });
@@ -477,7 +477,7 @@ function toBeijingTime(isoString) {
 
 // makeCopyableTag 构造一个可点击复制的标签:value 写入按钮文本,key 用作 title 提示;
 // 点击时把 value 写入剪贴板,短暂显示"已复制"反馈。值转义由 textContent 保证(无 XSS)。
-function makeCopyableTag(key, value, extraClass) {
+function makeCopyableTag(key, value, extraClass, line) {
   const tag = document.createElement("button");
   tag.type = "button";
   tag.className = "tag" + (extraClass ? " " + extraClass : "");
@@ -485,8 +485,20 @@ function makeCopyableTag(key, value, extraClass) {
   tag.textContent = key + ": " + value;
   tag.dataset.key = key;
   tag.dataset.value = String(value);
-  tag.addEventListener("click", () => copyText(String(value), tag));
+  if (key === "trace_id") {
+    tag.title = "打开链路日志";
+    tag.addEventListener("click", () => openTraceDrilldown(line, String(value)));
+  } else {
+    tag.addEventListener("click", () => copyText(String(value), tag));
+  }
   return tag;
+}
+
+function openTraceDrilldown(line, traceId) {
+  const state = traceDrilldownState(currentShareState(), line, traceId);
+  if (!state) return;
+  const qs = encodeShareState(state);
+  window.open(window.location.origin + window.location.pathname + "?" + qs, "_blank", "noopener");
 }
 
 // copyText 把文本写入剪贴板,成功后在目标元素上短暂显示"已复制"反馈。
