@@ -19,7 +19,10 @@ func TestMountAssets_ServesIndexAndStatic(t *testing.T) {
 	if err := MountAssets(r, assets.FS); err != nil {
 		t.Fatalf("MountAssets: %v", err)
 	}
-	New(&mockLoki{}, 1000).Register(r)
+	New(&mockLoki{}, 1000, UIOptions{
+		Envs: []Choice{{Label: "预发", Value: "staging"}},
+		Apps: []string{"boeet-alarm"},
+	}).Register(r)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
@@ -29,6 +32,12 @@ func TestMountAssets_ServesIndexAndStatic(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "日志查询") {
 		t.Errorf("GET / body not index.html: %s", w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `data-value="staging"`) {
+		t.Errorf("GET / body missing configured env: %s", w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `value="boeet-alarm"`) {
+		t.Errorf("GET / body missing configured app: %s", w.Body.String())
 	}
 
 	req2 := httptest.NewRequest(http.MethodGet, "/static/app.js", nil)

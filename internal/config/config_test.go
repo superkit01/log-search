@@ -50,6 +50,32 @@ loki:
 	}
 }
 
+func TestLoad_UIOptions(t *testing.T) {
+	p := writeTempYAML(t, `
+loki:
+  url: "http://loki.example:3100"
+ui:
+  envs:
+    - label: 预发
+      value: staging
+    - label: 生产
+      value: prod
+  apps:
+    - boeet-alarm
+    - boeet-cms
+`)
+	c, err := Load(p)
+	if err != nil {
+		t.Fatalf("Load error: %v", err)
+	}
+	if len(c.UI.Envs) != 2 || c.UI.Envs[0].Label != "预发" || c.UI.Envs[0].Value != "staging" {
+		t.Fatalf("envs = %+v", c.UI.Envs)
+	}
+	if len(c.UI.Apps) != 2 || c.UI.Apps[1] != "boeet-cms" {
+		t.Fatalf("apps = %+v", c.UI.Apps)
+	}
+}
+
 func TestLoad_MissingURLFails(t *testing.T) {
 	p := writeTempYAML(t, `
 server:
@@ -134,6 +160,9 @@ loki:
 	}
 	if c.Loki.DefaultLimit != 1000 {
 		t.Errorf("limit default = %d", c.Loki.DefaultLimit)
+	}
+	if len(c.UI.Envs) != 1 || c.UI.Envs[0].Label != "演示" || c.UI.Envs[0].Value != "demo" {
+		t.Errorf("env defaults = %+v", c.UI.Envs)
 	}
 }
 

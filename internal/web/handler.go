@@ -19,11 +19,26 @@ const maxLimit = 5000
 type Handler struct {
 	Loki  loki.Client
 	Limit int
+	UI    UIOptions
+}
+
+type UIOptions struct {
+	Envs []Choice
+	Apps []string
+}
+
+type Choice struct {
+	Label string
+	Value string
 }
 
 // New 创建 Handler。
-func New(lc loki.Client, defaultLimit int) *Handler {
-	return &Handler{Loki: lc, Limit: defaultLimit}
+func New(lc loki.Client, defaultLimit int, ui ...UIOptions) *Handler {
+	opts := defaultUIOptions()
+	if len(ui) > 0 {
+		opts = ui[0]
+	}
+	return &Handler{Loki: lc, Limit: defaultLimit, UI: opts}
 }
 
 // Register 在 gin engine 上注册路由。
@@ -36,7 +51,17 @@ func (h *Handler) Register(r *gin.Engine) {
 }
 
 func (h *Handler) index(c *gin.Context) {
-	c.HTML(http.StatusOK, "index.html", gin.H{"defaultLimit": h.Limit})
+	c.HTML(http.StatusOK, "index.html", gin.H{
+		"defaultLimit": h.Limit,
+		"envs":         h.UI.Envs,
+		"apps":         h.UI.Apps,
+	})
+}
+
+func defaultUIOptions() UIOptions {
+	return UIOptions{Envs: []Choice{
+		{Label: "演示", Value: "demo"},
+	}}
 }
 
 func (h *Handler) labels(c *gin.Context) {

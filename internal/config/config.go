@@ -14,6 +14,7 @@ import (
 type Config struct {
 	Server ServerCfg `yaml:"server"`
 	Loki   LokiCfg   `yaml:"loki"`
+	UI     UICfg     `yaml:"ui"`
 }
 
 type ServerCfg struct {
@@ -24,6 +25,16 @@ type LokiCfg struct {
 	URL          string `yaml:"url"`
 	Timeout      string `yaml:"timeout"`
 	DefaultLimit int    `yaml:"default_limit"`
+}
+
+type UICfg struct {
+	Envs []UIOption `yaml:"envs"`
+	Apps []string   `yaml:"apps"`
+}
+
+type UIOption struct {
+	Label string `yaml:"label"`
+	Value string `yaml:"value"`
 }
 
 // Duration 解析 timeout 字符串为 time.Duration。
@@ -97,5 +108,32 @@ func (c *Config) validate() error {
 	if c.Server.Addr == "" {
 		c.Server.Addr = ":8080"
 	}
+	if len(c.UI.Envs) == 0 {
+		c.UI.Envs = []UIOption{
+			{Label: "演示", Value: "demo"},
+		}
+	}
+	for i := range c.UI.Envs {
+		c.UI.Envs[i].Label = strings.TrimSpace(c.UI.Envs[i].Label)
+		c.UI.Envs[i].Value = strings.TrimSpace(c.UI.Envs[i].Value)
+		if c.UI.Envs[i].Value == "" {
+			return fmt.Errorf("ui.envs[%d].value is required", i)
+		}
+		if c.UI.Envs[i].Label == "" {
+			c.UI.Envs[i].Label = c.UI.Envs[i].Value
+		}
+	}
+	c.UI.Apps = compactStrings(c.UI.Apps)
 	return nil
+}
+
+func compactStrings(in []string) []string {
+	out := in[:0]
+	for _, v := range in {
+		v = strings.TrimSpace(v)
+		if v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }

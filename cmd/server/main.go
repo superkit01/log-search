@@ -35,7 +35,11 @@ func main() {
 		slog.Error("mount embedded assets failed", "err", err)
 		os.Exit(1)
 	}
-	web.New(lc, cfg.Loki.DefaultLimit).Register(r)
+	ui := web.UIOptions{Apps: cfg.UI.Apps}
+	for _, env := range cfg.UI.Envs {
+		ui.Envs = append(ui.Envs, web.Choice{Label: env.Label, Value: env.Value})
+	}
+	web.New(lc, cfg.Loki.DefaultLimit, ui).Register(r)
 
 	slog.Info("starting log-search", "addr", cfg.Server.Addr, "loki", cfg.Loki.URL)
 	if err := r.Run(cfg.Server.Addr); err != nil {

@@ -53,25 +53,6 @@ function showError(msg) { const b = $("error-bar"); b.classList.remove("info"); 
 function showInfo(msg) { const b = $("error-bar"); b.classList.add("info"); b.textContent = msg; b.hidden = false; }
 function hideError() { $("error-bar").hidden = true; }
 
-// loadAppValues 用当前时间范围拉取 app 标签的值列表,填充应用下拉框(保留首个"不限")。
-async function loadAppValues() {
-  const start = toUnix($("start").value);
-  const end = toUnix($("end").value);
-  try {
-    const j = await api("/api/label/app/values?start=" + start + "&end=" + end);
-    const sel = $("app-select");
-    const selected = sel.value;
-    const blank = sel.querySelector('option[value=""]');
-    sel.replaceChildren(blank);
-    (j.data || []).forEach((v) => {
-      const o = document.createElement("option");
-      o.value = v; o.textContent = v;
-      sel.appendChild(o);
-    });
-    if (selected) setSelectValue(sel, selected);
-  } catch (e) { showError(e.message); }
-}
-
 // saveFilters 把当前 env、levels、direction 写入 localStorage;失败静默降级(隐私模式等)。
 function saveFilters() {
   try {
@@ -86,7 +67,7 @@ function saveFilters() {
   } catch (_) { /* localStorage 不可用时忽略,不阻塞查询 */ }
 }
 
-// loadFilters 从 localStorage 恢复 env、level、direction;无记录或解析失败用默认值(env=test、level 全选、direction=BACKWARD)。
+// loadFilters 从 localStorage 恢复 env、level、direction;无记录或解析失败用默认值(env=首个配置项、level 全选、direction=BACKWARD)。
 function loadFilters() {
   let env = "", levels = ["debug", "info", "warn", "error"], direction = "";
   try {
@@ -99,8 +80,9 @@ function loadFilters() {
     }
   } catch (_) { /* 解析失败用默认值 */ }
 
+  const defaultEnvTab = document.querySelector("#env-tabs .env-tab");
   setActiveLevels(levels);
-  setActiveTabValue("env-tabs", env || "test");
+  setActiveTabValue("env-tabs", env || (defaultEnvTab ? defaultEnvTab.dataset.value : ""));
   setActiveTabValue("direction-tabs", direction || "BACKWARD");
 }
 
@@ -578,7 +560,6 @@ async function init() {
 
   const shared = decodeShareState(window.location.search);
   if (shared) applyShareState(shared);
-  await loadAppValues(); // 填充应用下拉(需先有时间范围)
   if (shared) {
     setSelectValue($("app-select"), shared.app || "");
     syncClearButtons();

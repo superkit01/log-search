@@ -52,15 +52,16 @@
           <button class="env-tab" data-value="FORWARD">正序</button>
         </div>
         <div class="env-tabs" id="env-tabs">
-          <button class="env-tab" data-value="dev">开发</button>
-          <button class="env-tab" data-value="test">测试</button>
-          <button class="env-tab" data-value="prod">生产</button>
+          {{range .envs}}<button class="env-tab" data-value="{{.Value}}">{{.Label}}</button>{{end}}
         </div>
       </div>
       <div class="row query-row">
         <label><span class="lbl">应用</span>
           <span class="clear-field clear-field-select">
-            <select id="app-select"><option value="">不限</option></select>
+            <select id="app-select">
+              <option value="">不限</option>
+              {{range .apps}}<option value="{{.}}">{{.}}</option>{{end}}
+            </select>
             <button type="button" id="app-clear" class="clear-icon" title="清除应用筛选" aria-label="清除应用筛选" hidden>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <line x1="6" y1="6" x2="18" y2="18"></line>

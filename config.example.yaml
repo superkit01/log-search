@@ -4,3 +4,10 @@ loki:
   url: "${LOKI_URL:-http://localhost:3100}"   # Loki 地址;设环境变量 LOKI_URL 即覆盖(便于容器化)
   timeout: "${LOKI_TIMEOUT:-30s}"             # HTTP 客户端超时
   default_limit: ${LOKI_DEFAULT_LIMIT:-1000}  # 查询默认条数
+ui:
+  envs:
+    - label: 演示
+      value: demo
+  apps:
+    - service-x
+    - service-y
