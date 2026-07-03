@@ -8,7 +8,7 @@ function traceDrilldownState(current, line, traceId) {
     env: (current && current.env) || ((line && line.labels) || {}).env || "",
     app: "",
     levels: [],
-    direction: "FORWARD",
+    direction: (current && current.direction) || "FORWARD",
     keyword: "",
     traceId: tid,
     start: ts - TRACE_DRILLDOWN_WINDOW_SECONDS,

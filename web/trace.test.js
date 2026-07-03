@@ -4,7 +4,7 @@ const { traceDrilldownState } = require("./static/trace.js");
 
 test("traceDrilldownState: builds a 15 minute window around the log line", () => {
   const got = traceDrilldownState(
-    { env: "test", app: "" },
+    { env: "test", app: "", direction: "BACKWARD" },
     {
       ts: "2026-07-02T09:13:16.000Z",
       labels: { app: "boeet-alarm" },
@@ -16,7 +16,7 @@ test("traceDrilldownState: builds a 15 minute window around the log line", () =>
     env: "test",
     app: "",
     levels: [],
-    direction: "FORWARD",
+    direction: "BACKWARD",
     keyword: "",
     traceId: "TID:abc",
     start: 1782982696,

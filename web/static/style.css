@@ -57,6 +57,9 @@ body.light-theme button:not(.theme-toggle):not(.env-tab):not(.clear-icon):not(.t
 
 body.light-theme .clear-icon { color: #666; }
 body.light-theme .clear-icon:hover { color: #333; background: #e8e8e8; }
+body.light-theme .time-shortcuts { background: #e8e8e8; }
+body.light-theme .time-shortcut { background: transparent !important; color: #666 !important; }
+body.light-theme .time-shortcut:hover { background: #dcdcdc !important; color: #333 !important; }
 
 body.light-theme .chart-wrap {
   background: #fff;
@@ -287,6 +290,26 @@ body.light-theme .line .txt-wrapper.collapsed .txt-preview::after {
 .time-inputs { display: inline-flex; align-items: center; gap: 6px; }
 .time-inputs input { width: 190px; min-width: 190px; }
 .time-sep { color: #888; }
+.time-shortcuts {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #2a2a2a;
+  padding: 3px;
+  border-radius: 6px;
+}
+.time-shortcut {
+  background: transparent;
+  color: #aaa;
+  border: 0;
+  padding: 5px 9px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.time-shortcut:hover {
+  background: #333;
+  color: #fff;
+}
 
 /* 输入框固定宽度:应用/时间 190px;链路/关键词 500px */
 #app-select { width: 190px; }

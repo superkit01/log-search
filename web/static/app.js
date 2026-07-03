@@ -148,18 +148,16 @@ document.querySelectorAll("#direction-tabs .env-tab").forEach((tab) => {
   });
 });
 
-// 当天默认时间范围:开始=今天0点,结束=今天23:59(最后一分钟)。
-function defaultStartTs() {
-  const d = new Date(); d.setHours(0, 0, 0, 0); return Math.floor(d.getTime() / 1000);
-}
-function defaultEndTs() {
-  const d = new Date(); d.setHours(23, 59, 0, 0); return Math.floor(d.getTime() / 1000);
-}
-
-// setDefaultRange 把起止时间设为当天默认范围,作为页面初始值。
+// setDefaultRange 把起止时间设为默认范围,作为页面初始值。
 function setDefaultRange() {
   $("start").value = toLocalInput(defaultStartTs());
   $("end").value = toLocalInput(defaultEndTs());
+}
+
+function setQuickRange(range) {
+  const ts = quickRangeTimestamps(range);
+  $("start").value = toLocalInput(ts.start);
+  $("end").value = toLocalInput(ts.end);
 }
 
 // 时间输入框不允许清空:用户清空后,在 change 时恢复为当天默认值,避免提交空范围。
@@ -174,6 +172,9 @@ function setDefaultRange() {
 $("search").addEventListener("click", search);
 $("share").addEventListener("click", shareCurrentQuery);
 $("scroll-area").addEventListener("scroll", onResultsScroll);
+document.querySelectorAll(".time-shortcut").forEach((btn) => {
+  btn.addEventListener("click", () => setQuickRange(btn.dataset.range));
+});
 
 // 带清除图标的字段:有值时显示图标,点击清空并聚焦。
 // select 用 change 事件;文本输入用 input 事件,随输入实时显隐。
@@ -571,7 +572,7 @@ function renderChart(lines) {
 }
 
 async function init() {
-  setDefaultRange();  // 默认今天 00:00 ~ 23:59
+  setDefaultRange();  // 默认当前时间往前1小时整点 ~ 今天 23:59
   loadFilters();      // 恢复 env、level
   loadTheme();        // 恢复主题
 

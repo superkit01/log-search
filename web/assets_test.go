@@ -12,6 +12,7 @@ func TestFS_HasAssets(t *testing.T) {
 		"static/logql.js",
 		"static/share.js",
 		"static/trace.js",
+		"static/timeRange.js",
 		"static/pagination.js",
 	} {
 		if _, err := FS.ReadFile(p); err != nil {
