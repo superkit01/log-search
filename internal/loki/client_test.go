@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"log-search/internal/storage"
 )
 
 func newTestClient(t *testing.T, handler http.HandlerFunc) Client {
@@ -154,7 +156,7 @@ func TestQueryRange_PlainTextError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	var httpErr *HTTPError
+	var httpErr *storage.HTTPError
 	if !errors.As(err, &httpErr) {
 		t.Fatalf("expected *HTTPError so the web layer can map to 4xx, got %T: %v", err, err)
 	}
@@ -175,7 +177,7 @@ func TestQueryRange_ReturnsHTTPError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	var httpErr *HTTPError
+	var httpErr *storage.HTTPError
 	if !errors.As(err, &httpErr) {
 		t.Fatalf("expected *HTTPError, got %T: %v", err, err)
 	}

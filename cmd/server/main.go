@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"log-search/internal/config"
+	"log-search/internal/elasticsearch"
 	"log-search/internal/loki"
+	"log-search/internal/storage"
 	"log-search/internal/web"
 	assets "log-search/web"
 
@@ -24,12 +26,31 @@ func main() {
 		slog.Error("load config failed", "err", err)
 		os.Exit(1)
 	}
-	timeout, err := cfg.Loki.Duration()
-	if err != nil {
-		slog.Error("invalid loki timeout", "err", err)
-		os.Exit(1)
+
+	// 根据配置创建存储客户端
+	var client storage.Client
+	var limit int
+
+	switch cfg.Storage.Type {
+	case "es", "elasticsearch":
+		timeout, err := cfg.Storage.ES.Duration()
+		if err != nil {
+			slog.Error("invalid elasticsearch timeout", "err", err)
+			os.Exit(1)
+		}
+		client = elasticsearch.NewHTTPClient(cfg.Storage.ES.URL, cfg.Storage.ES.Index, timeout)
+		limit = cfg.Storage.ES.DefaultLimit
+		slog.Info("using Elasticsearch storage", "url", cfg.Storage.ES.URL, "index", cfg.Storage.ES.Index)
+	default: // loki
+		timeout, err := cfg.Storage.Loki.Duration()
+		if err != nil {
+			slog.Error("invalid loki timeout", "err", err)
+			os.Exit(1)
+		}
+		client = loki.NewHTTPClient(cfg.Storage.Loki.URL, timeout)
+		limit = cfg.Storage.Loki.DefaultLimit
+		slog.Info("using Loki storage", "url", cfg.Storage.Loki.URL)
 	}
-	lc := loki.NewHTTPClient(cfg.Loki.URL, timeout)
 
 	r := gin.Default()
 	if err := r.SetTrustedProxies(nil); err != nil {
@@ -40,9 +61,9 @@ func main() {
 		slog.Error("mount embedded assets failed", "err", err)
 		os.Exit(1)
 	}
-	web.New(lc, cfg.Loki.DefaultLimit, cfg.UI).Register(r)
+	web.New(client, limit, cfg.UI).Register(r)
 
-	slog.Info("starting log-search", "addr", cfg.Server.Addr, "loki", cfg.Loki.URL)
+	slog.Info("starting log-search", "addr", cfg.Server.Addr)
 	if err := newHTTPServer(cfg, r).ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		slog.Error("server failed", "err", err)
 		os.Exit(1)

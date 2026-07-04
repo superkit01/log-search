@@ -19,7 +19,7 @@ func TestMountAssets_ServesIndexAndStatic(t *testing.T) {
 	if err := MountAssets(r, assets.FS); err != nil {
 		t.Fatalf("MountAssets: %v", err)
 	}
-	New(&mockLoki{}, 1000, UIOptions{
+	New(&mockStorage{}, 1000, UIOptions{
 		Envs: []Choice{{Label: "预发", Value: "staging"}},
 		Apps: []string{"boeet-alarm"},
 	}).Register(r)
@@ -66,7 +66,7 @@ func TestIndex_EmptyUIOptionsFallsBackToDefaultEnv(t *testing.T) {
 	if err := MountAssets(r, assets.FS); err != nil {
 		t.Fatalf("MountAssets: %v", err)
 	}
-	New(&mockLoki{}, 1000, UIOptions{}).Register(r)
+	New(&mockStorage{}, 1000, UIOptions{}).Register(r)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()

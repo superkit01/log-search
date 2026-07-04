@@ -9,17 +9,16 @@ import (
 	"time"
 
 	"log-search/internal/config"
-	"log-search/internal/logparse"
-	"log-search/internal/loki"
+	"log-search/internal/storage"
 
 	"github.com/gin-gonic/gin"
 )
 
-// Handler 持有 Loki 客户端与默认 limit。
+// Handler 持有存储客户端与默认 limit。
 type Handler struct {
-	Loki  loki.Client
-	Limit int
-	UI    UIOptions
+	Client storage.Client
+	Limit  int
+	UI     UIOptions
 }
 
 type UIOptions = config.UICfg
@@ -27,7 +26,7 @@ type UIOptions = config.UICfg
 type Choice = config.UIOption
 
 // New 创建 Handler。
-func New(lc loki.Client, defaultLimit int, ui ...UIOptions) *Handler {
+func New(client storage.Client, defaultLimit int, ui ...UIOptions) *Handler {
 	opts := UIOptions(config.DefaultUICfg())
 	if len(ui) > 0 {
 		opts = ui[0]
@@ -35,7 +34,7 @@ func New(lc loki.Client, defaultLimit int, ui ...UIOptions) *Handler {
 			opts.Envs = config.DefaultUICfg().Envs
 		}
 	}
-	return &Handler{Loki: lc, Limit: defaultLimit, UI: opts}
+	return &Handler{Client: client, Limit: defaultLimit, UI: opts}
 }
 
 // Register 在 gin engine 上注册路由。
@@ -74,9 +73,9 @@ func (h *Handler) queryRange(c *gin.Context) {
 		return
 	}
 	limit := h.Limit
-	direction := loki.Backward
-	if req.Direction == string(loki.Forward) {
-		direction = loki.Forward
+	direction := storage.Backward
+	if req.Direction == string(storage.Forward) {
+		direction = storage.Forward
 	}
 	if req.Cursor != "" {
 		ns, err := strconv.ParseInt(req.Cursor, 10, 64)
@@ -84,7 +83,7 @@ func (h *Handler) queryRange(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "cursor must be a positive unix nanosecond timestamp"})
 			return
 		}
-		if direction == loki.Forward {
+		if direction == storage.Forward {
 			start = time.Unix(0, ns+1)
 		} else {
 			end = time.Unix(0, ns-1)
@@ -96,16 +95,19 @@ func (h *Handler) queryRange(c *gin.Context) {
 	}
 	log.Printf("[Loki Query] query=%q start=%s end=%s limit=%d direction=%s cursor=%s",
 		query, start.Format(time.RFC3339), end.Format(time.RFC3339), limit, direction, req.Cursor)
-	res, err := h.Loki.QueryRange(c.Request.Context(), query, start, end, limit, direction)
+	res, err := h.Client.QueryRange(c.Request.Context(), query, start, end, limit, direction)
 	if err != nil {
-		status, body := lokiStatusAndBody(err)
-		log.Printf("[Loki Error] %s %s: %v", c.Request.Method, c.Request.URL.Path, err)
+		status, body := storageStatusAndBody(err)
+		log.Printf("[Storage Error] %s %s: %v", c.Request.Method, c.Request.URL.Path, err)
 		c.JSON(status, gin.H{"error": body})
 		return
 	}
 	for i := range res.Lines {
-		res.Lines[i].Level = string(logparse.DetectLevel(res.Lines[i].Raw))
-		res.Lines[i].Labels = normalizeLineTags(res.Lines[i].Labels, res.Lines[i].Level)
+		// 从 labels 中提取 level 到 Level 字段（前端使用 l.level 而非 l.labels["level"]）
+		if lvl, ok := res.Lines[i].Labels["level"]; ok {
+			res.Lines[i].Level = lvl
+		}
+		res.Lines[i].Labels = normalizeLineTags(res.Lines[i].Labels)
 	}
 	if len(res.Lines) >= limit {
 		res.NextCursor = strconv.FormatInt(res.Lines[len(res.Lines)-1].Time.UnixNano(), 10)
@@ -119,15 +121,9 @@ const maxQueryRangeBodyBytes int64 = 16 * 1024
 // keys here when the UI should display another stable Loki label.
 var logTagKeys = []string{"env", "app", "level", "tid"}
 
-func normalizeLineTags(labels map[string]string, level string) map[string]string {
+func normalizeLineTags(labels map[string]string) map[string]string {
 	out := make(map[string]string, len(logTagKeys))
 	for _, key := range logTagKeys {
-		if key == "level" {
-			if level != "" {
-				out[key] = level
-			}
-			continue
-		}
 		if value := labels[key]; value != "" {
 			out[key] = value
 		}
@@ -150,15 +146,15 @@ func parseRange(c *gin.Context, start, end int64) (time.Time, time.Time, bool) {
 	return st, en, true
 }
 
-// lokiStatusAndBody maps Loki errors to appropriate HTTP status codes and response bodies.
-func lokiStatusAndBody(err error) (int, string) {
-	var httpErr *loki.HTTPError
+// storageStatusAndBody maps storage errors to appropriate HTTP status codes and response bodies.
+func storageStatusAndBody(err error) (int, string) {
+	var httpErr *storage.HTTPError
 	if errors.As(err, &httpErr) {
-		// 4xx from Loki → same 4xx to client; 5xx → 502
+		// 4xx from storage → same 4xx to client; 5xx → 502
 		if httpErr.StatusCode >= 400 && httpErr.StatusCode < 500 {
-			return httpErr.StatusCode, "Loki: " + httpErr.Message
+			return httpErr.StatusCode, "Storage: " + httpErr.Message
 		}
 	}
 	// Network/timeout or other errors → 502
-	return http.StatusBadGateway, "Loki: " + err.Error()
+	return http.StatusBadGateway, "Storage: " + err.Error()
 }

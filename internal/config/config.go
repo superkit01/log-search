@@ -12,19 +12,34 @@ import (
 )
 
 type Config struct {
-	Server ServerCfg `yaml:"server"`
-	Loki   LokiCfg   `yaml:"loki"`
-	UI     UICfg     `yaml:"ui"`
+	Server  ServerCfg  `yaml:"server"`
+	Storage StorageCfg `yaml:"storage"`
+	UI      UICfg      `yaml:"ui"`
 }
 
-type ServerCfg struct {
-	Addr string `yaml:"addr"`
+// StorageCfg 存储后端配置
+type StorageCfg struct {
+	Type string  `yaml:"type"` // loki, es
+	Loki  LokiCfg `yaml:"loki"`
+	ES    ESCfg   `yaml:"elasticsearch"`
 }
 
 type LokiCfg struct {
 	URL          string `yaml:"url"`
 	Timeout      string `yaml:"timeout"`
 	DefaultLimit int    `yaml:"default_limit"`
+}
+
+// ESCfg Elasticsearch 配置
+type ESCfg struct {
+	URL          string `yaml:"url"`
+	Timeout      string `yaml:"timeout"`
+	DefaultLimit int    `yaml:"default_limit"`
+	Index        string `yaml:"index"` // 索引名称模式，支持时间戳如 "logs-{yyyy.MM.dd}"
+}
+
+type ServerCfg struct {
+	Addr string `yaml:"addr"`
 }
 
 const (
@@ -51,6 +66,11 @@ func DefaultUICfg() UICfg {
 // Duration 解析 timeout 字符串为 time.Duration。
 func (l LokiCfg) Duration() (time.Duration, error) {
 	return time.ParseDuration(l.Timeout)
+}
+
+// Duration 解析 timeout 字符串为 time.Duration。
+func (e ESCfg) Duration() (time.Duration, error) {
+	return time.ParseDuration(e.Timeout)
 }
 
 func Load(path string) (*Config, error) {
@@ -93,39 +113,87 @@ func expandEnv(s string) string {
 }
 
 func (c *Config) validate() error {
-	if c.Loki.URL == "" {
-		return fmt.Errorf("loki.url is required")
+	// Set default storage type
+	if c.Storage.Type == "" {
+		c.Storage.Type = "loki"
 	}
-	// Validate URL scheme and host
-	u, err := url.Parse(c.Loki.URL)
+	// Validate based on storage type
+	switch c.Storage.Type {
+	case "loki":
+		return c.validateLoki()
+	case "es":
+		return c.validateES()
+	default:
+		return fmt.Errorf("storage.type must be 'loki' or 'es', got %q", c.Storage.Type)
+	}
+}
+
+func (c *Config) validateLoki() error {
+	if c.Storage.Loki.URL == "" {
+		return fmt.Errorf("storage.loki.url is required when type=loki")
+	}
+	u, err := url.Parse(c.Storage.Loki.URL)
 	if err != nil {
-		return fmt.Errorf("loki.url invalid %q: must be http(s)://host", c.Loki.URL)
+		return fmt.Errorf("storage.loki.url invalid %q: must be http(s)://host", c.Storage.Loki.URL)
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return fmt.Errorf("loki.url invalid %q: must be http(s)://host", c.Loki.URL)
+		return fmt.Errorf("storage.loki.url invalid %q: must be http(s)://host", c.Storage.Loki.URL)
 	}
 	if u.Host == "" {
-		return fmt.Errorf("loki.url invalid %q: must be http(s)://host", c.Loki.URL)
+		return fmt.Errorf("storage.loki.url invalid %q: must be http(s)://host", c.Storage.Loki.URL)
 	}
-	if c.Loki.Timeout == "" {
-		c.Loki.Timeout = "30s"
+	if c.Storage.Loki.Timeout == "" {
+		c.Storage.Loki.Timeout = "30s"
 	}
-	if _, err := time.ParseDuration(c.Loki.Timeout); err != nil {
-		return fmt.Errorf("loki.timeout invalid %q: %w", c.Loki.Timeout, err)
+	if _, err := time.ParseDuration(c.Storage.Loki.Timeout); err != nil {
+		return fmt.Errorf("storage.loki.timeout invalid %q: %w", c.Storage.Loki.Timeout, err)
 	}
-	if c.Loki.DefaultLimit <= 0 {
-		c.Loki.DefaultLimit = DefaultQueryLimit
+	if c.Storage.Loki.DefaultLimit <= 0 {
+		c.Storage.Loki.DefaultLimit = DefaultQueryLimit
 	}
-	if c.Loki.DefaultLimit > MaxQueryLimit {
-		return fmt.Errorf("loki.default_limit must be between 1 and %d", MaxQueryLimit)
+	if c.Storage.Loki.DefaultLimit > MaxQueryLimit {
+		return fmt.Errorf("storage.loki.default_limit must be between 1 and %d", MaxQueryLimit)
 	}
+	return c.validateCommon()
+}
+
+func (c *Config) validateES() error {
+	if c.Storage.ES.URL == "" {
+		return fmt.Errorf("storage.elasticsearch.url is required when type=es")
+	}
+	u, err := url.Parse(c.Storage.ES.URL)
+	if err != nil {
+		return fmt.Errorf("storage.elasticsearch.url invalid %q: must be http(s)://host", c.Storage.ES.URL)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("storage.elasticsearch.url invalid %q: must be http(s)://host", c.Storage.ES.URL)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("storage.elasticsearch.url invalid %q: must be http(s)://host", c.Storage.ES.URL)
+	}
+	if c.Storage.ES.Timeout == "" {
+		c.Storage.ES.Timeout = "30s"
+	}
+	if _, err := time.ParseDuration(c.Storage.ES.Timeout); err != nil {
+		return fmt.Errorf("storage.elasticsearch.timeout invalid %q: %w", c.Storage.ES.Timeout, err)
+	}
+	if c.Storage.ES.DefaultLimit <= 0 {
+		c.Storage.ES.DefaultLimit = DefaultQueryLimit
+	}
+	if c.Storage.ES.DefaultLimit > MaxQueryLimit {
+		return fmt.Errorf("storage.elasticsearch.default_limit must be between 1 and %d", MaxQueryLimit)
+	}
+	if c.Storage.ES.Index == "" {
+		return fmt.Errorf("storage.elasticsearch.index is required when type=es")
+	}
+	return c.validateCommon()
+}
+
+func (c *Config) validateCommon() error {
 	if c.Server.Addr == "" {
 		c.Server.Addr = ":8080"
 	}
-	if err := validateUIOptions(&c.UI); err != nil {
-		return err
-	}
-	return nil
+	return validateUIOptions(&c.UI)
 }
 
 // validateUIOptions 验证并规范化 UI 配置，trim 空白、应用默认值。

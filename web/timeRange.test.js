@@ -24,9 +24,9 @@ test("quickRangeTimestamps: today starts at 00:00 and ends at 23:59", () => {
   });
 });
 
-test("default time range is 1h quick range", () => {
+test("default time range is today", () => {
   const now = new Date("2026-07-03T08:35:12+08:00");
-  const range = quickRangeTimestamps("1h", now);
+  const range = quickRangeTimestamps("today", now);
 
   assert.strictEqual(defaultStartTs(now), range.start);
   assert.strictEqual(defaultEndTs(now), range.end);

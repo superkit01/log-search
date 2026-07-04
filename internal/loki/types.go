@@ -2,30 +2,22 @@ package loki
 
 import (
 	"encoding/json"
-	"time"
+
+	"log-search/internal/storage"
 )
 
 // Line 是拍平后的单条日志。Level 由上层(web)填充。
-type Line struct {
-	Time   time.Time         `json:"ts"`
-	Level  string            `json:"level"`
-	Raw    string            `json:"line"`
-	Labels map[string]string `json:"labels"`
-}
+type Line = storage.Line
 
 // QueryResult 是范围查询的聚合结果。
-type QueryResult struct {
-	Lines      []Line `json:"lines"`
-	Total      int    `json:"total"`
-	NextCursor string `json:"nextCursor,omitempty"`
-}
+type QueryResult = storage.QueryResult
 
 // Direction 是查询方向。
-type Direction string
+type Direction = storage.Direction
 
 const (
-	Forward  Direction = "FORWARD"
-	Backward Direction = "BACKWARD"
+	Forward  Direction = storage.Forward
+	Backward Direction = storage.Backward
 )
 
 // 以下是 Loki JSON 响应的内部结构(不导出)。

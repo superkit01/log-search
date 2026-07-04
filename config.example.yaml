@@ -1,9 +1,22 @@
 server:
   addr: "${SERVER_ADDR:-:8080}"
-loki:
-  url: "${LOKI_URL:-http://localhost:3100}"   # Loki 地址;设环境变量 LOKI_URL 即覆盖(便于容器化)
-  timeout: "${LOKI_TIMEOUT:-30s}"             # HTTP 客户端超时
-  default_limit: ${LOKI_DEFAULT_LIMIT:-1000}  # 查询默认条数
+
+storage:
+  type: "${STORAGE_TYPE:-loki}"  # 存储类型: loki 或 es
+
+  # Loki 配置 (type=loki 时使用)
+  loki:
+    url: "${LOKI_URL:-http://localhost:3100}"          # Loki 地址
+    timeout: "${LOKI_TIMEOUT:-30s}"                    # HTTP 客户端超时
+    default_limit: ${LOKI_DEFAULT_LIMIT:-1000}         # 查询默认条数
+
+  # Elasticsearch 配置 (type=es 时使用)
+  elasticsearch:
+    url: "${ES_URL:-http://localhost:9200}"            # ES 地址
+    timeout: "${ES_TIMEOUT:-30s}"                      # HTTP 客户端超时
+    default_limit: ${ES_DEFAULT_LIMIT:-1000}           # 查询默认条数
+    index: "${ES_INDEX:-logs-{yyyy.MM.dd}}"           # 索引名称模式,支持时间戳占位符
+
 ui:
   envs:
     - label: 演示

@@ -28,11 +28,11 @@ function quickRangeTimestamps(range, now) {
 }
 
 function defaultStartTs(now) {
-  return quickRangeTimestamps("1h", now).start;
+  return quickRangeTimestamps("today", now).start;
 }
 
 function defaultEndTs(now) {
-  return quickRangeTimestamps("1h", now).end;
+  return quickRangeTimestamps("today", now).end;
 }
 
 if (typeof module !== "undefined" && module.exports) {

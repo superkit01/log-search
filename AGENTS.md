@@ -4,7 +4,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## What this is
 
-`log-search` is a single-process Go web app (Gin) that queries an existing **Loki** instance and renders a server-side UI. Frontend and backend are not separated: Gin renders HTML templates and serves the JSON API the page calls. There is no frontend build step — `web/static/app.js` is plain JS and Chart.js is vendored under `web/static/`.
+`log-search` is a single-process Go web app (Gin) that queries an existing log storage backend (**Loki** or **Elasticsearch**) and renders a server-side UI. Frontend and backend are not separated: Gin renders HTML templates and serves the JSON API the page calls. There is no frontend build step — `web/static/app.js` is plain JS and Chart.js is vendored under `web/static/`.
 
 ## Commands
 
@@ -14,32 +14,37 @@ make build      # builds ./bin/log-search
 make test       # go test ./...
 make vet        # go vet ./...
 make tidy       # go mod tidy
+make seed-loki  # generate Loki test data
+make seed-es    # generate Elasticsearch test data
 
 # single test / package
 go test ./internal/web/ -run TestQueryRange_BadRange -v
 go test ./internal/loki/ -v
+go test ./internal/elasticsearch/ -v
+node --test web/*.test.js
 ```
 
-Before first run: `cp config.example.yaml config.yaml` and set `loki.url` to the real Loki. `config.yaml` is gitignored (it holds environment-specific endpoints); only `config.example.yaml` is tracked. The server reads `--config` (default `config.yaml`).
+Before first run: `cp config.example.yaml config.yaml`, choose `storage.type` (`loki` or `es`), and set the matching storage URL/index. `config.yaml` is gitignored (it holds environment-specific endpoints); only `config.example.yaml` is tracked. The server reads `--config` (default `config.yaml`).
 
 ## Architecture
 
-Request flow: **browser JSON filters → `internal/web` handler builds LogQL → `internal/loki` client → Loki HTTP API → flatten streams → `internal/logparse` fills level → JSON → browser**.
+Request flow: **browser JSON filters → `internal/web` handler builds a LogQL-style query → `internal/storage.Client` implementation → Loki HTTP API or ES `_search` → normalize lines/tags → JSON → browser**.
 
 The layering is intentional and each boundary matters:
 
-- **`internal/config`** — `Load(path)` reads YAML, then `validate()` both checks (`loki.url` must be `http(s)://host`) and **applies defaults** (`:8080`, `30s`, 1000). Validation mutates the receiver. Invalid config is fail-fast — `main` exits 1.
-- **`internal/loki`** — talks to Loki over plain `net/http` (no Loki client library). `Client` is an **interface** so the web layer can be tested with a mock; `NewHTTPClient` is the only real implementation. Start/end are sent to Loki as **nanosecond** unix (`UnixNano()`), even though the API accepts seconds. `get()` is the single place that does HTTP and error mapping.
-- **`internal/logparse`** — `DetectLevel(line string) Level` is a **pure** function; the loki package must not import it. It returns a `Level` (a `string` type, lowercase: `"error"`/`"warn"`/`"info"`/`"debug"`).
-- **`internal/web`** — Gin handlers. It owns browser query JSON validation, LogQL construction, cursor adjustment, and level enrichment: the loki client returns `Line.Level == ""` and `handler.queryRange` fills it before responding.
+- **`internal/config`** — `Load(path)` reads YAML, expands `${VAR}` / `${VAR:-default}`, then `validate()` both checks and **applies defaults** (`:8080`, `30s`, 1000). `storage.type` defaults to `loki`; valid tracked values are `loki` and `es`. Validation mutates the receiver. Invalid config is fail-fast — `main` exits 1.
+- **`internal/storage`** — owns the backend-neutral `Client` interface, `Line`, `QueryResult`, `Direction`, and `HTTPError`. Web handlers depend on this package, not on a concrete Loki/ES client.
+- **`internal/loki`** — talks to Loki over plain `net/http` (no Loki client library). Start/end are sent to Loki as **nanosecond** unix (`UnixNano()`), even though the API accepts seconds. It flattens streams and merges returned labels/structured metadata into `Line.Labels`.
+- **`internal/elasticsearch`** — parses the web-layer LogQL-style query and converts it to ES DSL, then calls `/{index}/_search`. It expects documents with top-level `@timestamp`, `message`, `env`, `app`, `level`, and optional `tid`. Exact label filters use `.keyword` fields. Index patterns without `{...}` (for example `logs-*`) pass through unchanged; `{yyyy.MM.dd}` style patterns are date-expanded.
+- **`internal/web`** — Gin handlers. It owns browser query JSON validation, LogQL-style query construction, cursor adjustment, and response shaping. `handler.queryRange` copies `labels["level"]` into `Line.Level` before responding and allowlists visible tags.
 
-### Two contracts that are easy to break
+### Contracts that are easy to break
 
-1. **Error status mapping** lives in `web.lokiStatusAndBody` (handler.go). A `*loki.HTTPError` with a 4xx status passes through as the **same 4xx** (e.g. a bad-LogQL response from Loki → 400 to the browser); everything else (network/timeout/5xx) → **502**. The `loki` client returns `&HTTPError` only for non-success HTTP responses; transport failures are plain wrapped errors so they stay 502. If you change error handling in either package, keep this split intact and covered by tests.
+1. **Error status mapping** lives in `web.storageStatusAndBody` (handler.go). A `*storage.HTTPError` with a 4xx status passes through as the **same 4xx** (e.g. a bad query response from storage → 400 to the browser); everything else (network/timeout/5xx) → **502**. Storage clients should return `&storage.HTTPError` only for non-success HTTP responses; transport failures should remain plain wrapped errors so they stay 502. If you change error handling in either package, keep this split intact and covered by tests.
 
-2. **`/api/query_range` is POST JSON.** The browser sends filters (`env`, `app`, `levels`, `keyword`, `traceId`, `start`, `end`, `direction`, optional `cursor`) and the web layer builds LogQL. The backend owns `limit` from config and returns `QueryResult` **directly**: `{"lines":[{ts,level,line,labels}], "total":N}`. Don't wrap it in `data`, and don't move LogQL construction or limit selection back to the browser.
+2. **`/api/query_range` is POST JSON.** The browser sends filters (`env`, `app`, `levels`, `keyword`, `traceId`, `start`, `end`, `direction`, optional `cursor`) and the web layer builds a LogQL-style query. The backend owns `limit` from config and returns `QueryResult` **directly**: `{"lines":[{ts,level,line,labels}], "total":N}`. Don't wrap it in `data`, and don't move query construction or limit selection back to the browser.
 
-3. **Visible line tags are allowlisted.** `handler.queryRange` returns only `env`, `app`, `level`, and `tid` in `Line.Labels`; add future tags through `logTagKeys`. `tid` is expected to be Loki structured metadata, queried with the LogQL pipeline filter `| tid="..."`, not a stream selector label.
+3. **Visible line tags are allowlisted.** `handler.queryRange` returns only `env`, `app`, `level`, and `tid` in `Line.Labels`; add future tags through `logTagKeys`. `tid` is expected to be Loki structured metadata when using Loki, queried with the LogQL pipeline filter `| tid="..."`, not a stream selector label. With ES, `tid` is a normal document field queried as `tid.keyword`.
 
 ### Wiring (`cmd/server/main.go`)
 
@@ -48,11 +53,12 @@ Templates and static assets are **embedded** into the binary via `go:embed` (`we
 ## Conventions
 
 - The `go` directive in go.mod is pinned to the `1.24` line (`go 1.24.5`); gin v1.10.0 is compatible with it. If `go mod tidy` bumps the directive or downgrades gin, that's a regression — gin v1.10 requires at least `go 1.24.5`, so the directive should not exceed the 1.24 line.
-- `direction` defaults to `BACKWARD` and treats any non-`"FORWARD"` value as `BACKWARD` (lenient by design). Query `limit` is backend-owned from `loki.default_limit`; config validation bounds it to 1–5000 (`config.MaxQueryLimit`).
-- Tests in `internal/loki` use `httptest` (real HTTP, not mocks of the client); tests in `internal/web` inject a mock `loki.Client`. The mock in `handler_test.go` must match the `loki.Client` interface signatures exactly — a signature drift compiles only there.
+- `direction` defaults to `BACKWARD` and treats any non-`"FORWARD"` value as `BACKWARD` (lenient by design). Query `limit` is backend-owned from the active storage config (`storage.loki.default_limit` or `storage.elasticsearch.default_limit`); config validation bounds it to 1–5000 (`config.MaxQueryLimit`).
+- Tests in `internal/loki` use `httptest` (real HTTP, not mocks of the client); tests in `internal/web` inject a mock `storage.Client`. The mock in `handler_test.go` must match the `storage.Client` interface signatures exactly — a signature drift compiles only there.
 - Log lines are rendered with `textContent` in the frontend (not `innerHTML`) to avoid XSS from log content.
-- **Query-form defaults & persistence** (`app.js` `loadFilters`): on first open (no `localStorage`) the form defaults to the first configured env (falling back to “演示”/`demo`), **all** level tabs selected, direction=`BACKWARD`, and a time range from the previous rounded hour to today 23:59. Returning users get saved env/levels/direction restored from the `localStorage` key `log-search:filters`; those defaults are only fallbacks when a value is unset. Quick-range buttons (`1h`, `3h`, `今天`) are the only shortcuts; the two datetime inputs refuse to stay empty (clearing refills the default start/end on `change`).
+- **Query-form defaults & persistence** (`app.js` `loadFilters` + `timeRange.js`): on first open (no `localStorage`) the form defaults to the first configured env (falling back to “演示”/`demo`), **all** level tabs selected, direction=`BACKWARD`, and a time range of today 00:00–23:59. Returning users get saved env/levels/direction restored from the `localStorage` key `log-search:filters`; those defaults are only fallbacks when a value is unset. Quick-range buttons (`1h`, `3h`, `今天`) are the only shortcuts; the two datetime inputs refuse to stay empty (clearing refills the default start/end on `change`).
 - **"All levels" means no level filter.** `search()` drops the level condition entirely when every level tab is active (`levelTabs.length === allLevelTabs.length` ⇒ `levels = []`). So the default all-selected state queries all levels, not a `{level=~"..."}` selector.
+- **ES test data and UI apps must match.** `scripts/seed_es.py` writes apps `api-server`, `worker`, `gateway`, and `auth-service`; `ui.apps` must list values that actually exist in ES documents, or selecting an app will correctly return zero rows. The ES script writes `tid` on 10% of documents.
 - **Tag colors are positional, not key-based** (`app.js` `TAG_PALETTE` + `style.css` `.tag-c0..c6`). `app` and `level` use fixed classes; every other label is colored by render position (cycling `tag-c0..c6`) so unknown/varying label keys across deployments always get a color. Adding a palette slot requires updating **both** the JS array and the CSS classes (dark + light).
 - **Query form is one flowing row.** All conditions (app, time group, trace-id, keyword) and the search button live in a single `.row.query-row` (`flex-wrap: wrap`); `.query-row > * { flex: 0 0 auto }` keeps each at its fixed width (app/time 190px, trace-id/keyword 500px) and wraps instead of stretching. `.controls .row` no longer sets `align-items` (defaults to `stretch`).
 

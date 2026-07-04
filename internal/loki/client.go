@@ -12,17 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"log-search/internal/storage"
 )
-
-// HTTPError is returned when Loki responds with a non-success HTTP status.
-type HTTPError struct {
-	StatusCode int
-	Message    string
-}
-
-func (e *HTTPError) Error() string {
-	return fmt.Sprintf("loki: HTTP %d: %s", e.StatusCode, e.Message)
-}
 
 // Client 抽象 Loki 查询能力,便于测试注入 mock。
 type Client interface {
@@ -127,7 +119,7 @@ func (c *httpClient) get(ctx context.Context, path string, params url.Values, ou
 				msg = ar.ErrorType + ": " + msg
 			}
 		}
-		return &HTTPError{StatusCode: resp.StatusCode, Message: msg}
+		return &storage.HTTPError{StatusCode: resp.StatusCode, Message: msg}
 	}
 
 	var ar apiResponse
@@ -142,7 +134,7 @@ func (c *httpClient) get(ctx context.Context, path string, params url.Values, ou
 		if ar.ErrorType != "" {
 			msg = ar.ErrorType + ": " + msg
 		}
-		return &HTTPError{StatusCode: resp.StatusCode, Message: msg}
+		return &storage.HTTPError{StatusCode: resp.StatusCode, Message: msg}
 	}
 	if out != nil {
 		// Empty data field is valid (means no results), skip unmarshal

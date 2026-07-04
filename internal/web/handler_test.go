@@ -9,22 +9,22 @@ import (
 	"testing"
 	"time"
 
-	"log-search/internal/loki"
+	"log-search/internal/storage"
 
 	"github.com/gin-gonic/gin"
 )
 
-type mockLoki struct {
-	result    *loki.QueryResult
+type mockStorage struct {
+	result    *storage.QueryResult
 	err       error
 	lastQuery string
 	lastStart time.Time
 	lastEnd   time.Time
 	lastLimit int
-	lastDir   loki.Direction
+	lastDir   storage.Direction
 }
 
-func (m *mockLoki) QueryRange(ctx context.Context, query string, start, end time.Time, limit int, direction loki.Direction) (*loki.QueryResult, error) {
+func (m *mockStorage) QueryRange(ctx context.Context, query string, start, end time.Time, limit int, direction storage.Direction) (*storage.QueryResult, error) {
 	m.lastQuery = query
 	m.lastStart = start
 	m.lastEnd = end
@@ -33,11 +33,11 @@ func (m *mockLoki) QueryRange(ctx context.Context, query string, start, end time
 	return m.result, m.err
 }
 
-func setupRouter(m loki.Client) *gin.Engine {
+func setupRouter(m storage.Client) *gin.Engine {
 	return setupRouterLimit(m, 1000)
 }
 
-func setupRouterLimit(m loki.Client, limit int) *gin.Engine {
+func setupRouterLimit(m storage.Client, limit int) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	New(m, limit).Register(r)
@@ -51,8 +51,8 @@ func postQueryRange(body string) *http.Request {
 }
 
 func TestQueryRange_OK_FillsLevel(t *testing.T) {
-	m := &mockLoki{result: &loki.QueryResult{
-		Lines: []loki.Line{{Raw: "level=error boom"}},
+	m := &mockStorage{result: &storage.QueryResult{
+		Lines: []storage.Line{{Raw: "error boom", Labels: map[string]string{"level": "error"}}},
 		Total: 1,
 	}}
 	r := setupRouter(m)
@@ -63,7 +63,7 @@ func TestQueryRange_OK_FillsLevel(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
 	}
-	var res loki.QueryResult
+	var res storage.QueryResult
 	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
 		t.Fatal(err)
 	}
@@ -76,15 +76,15 @@ func TestQueryRange_OK_FillsLevel(t *testing.T) {
 	if m.lastLimit != 1000 {
 		t.Fatalf("limit = %d, want 1000", m.lastLimit)
 	}
-	if m.lastDir != loki.Forward {
+	if m.lastDir != storage.Forward {
 		t.Fatalf("direction = %s, want FORWARD", m.lastDir)
 	}
 }
 
 func TestQueryRange_NormalizesTags(t *testing.T) {
-	m := &mockLoki{result: &loki.QueryResult{
-		Lines: []loki.Line{{
-			Raw: "level=warn timeout",
+	m := &mockStorage{result: &storage.QueryResult{
+		Lines: []storage.Line{{
+			Raw: "timeout",
 			Labels: map[string]string{
 				"env":      "test",
 				"app":      "api",
@@ -104,7 +104,7 @@ func TestQueryRange_NormalizesTags(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
 	}
-	var res loki.QueryResult
+	var res storage.QueryResult
 	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestQueryRange_NormalizesTags(t *testing.T) {
 	want := map[string]string{
 		"env":   "test",
 		"app":   "api",
-		"level": "warn",
+		"level": "info",
 		"tid":   "tid-1",
 	}
 	if len(got) != len(want) {
@@ -127,8 +127,8 @@ func TestQueryRange_NormalizesTags(t *testing.T) {
 
 func TestQueryRange_CursorBackward_AdjustsEndAndReturnsNextCursor(t *testing.T) {
 	last := time.Unix(0, 1234567890).UTC()
-	m := &mockLoki{result: &loki.QueryResult{
-		Lines: []loki.Line{
+	m := &mockStorage{result: &storage.QueryResult{
+		Lines: []storage.Line{
 			{Time: time.Unix(0, 2234567890).UTC(), Raw: "info newest"},
 			{Time: last, Raw: "info oldest"},
 		},
@@ -145,7 +145,7 @@ func TestQueryRange_CursorBackward_AdjustsEndAndReturnsNextCursor(t *testing.T) 
 	if got, want := m.lastEnd.UnixNano(), int64(4999999999); got != want {
 		t.Fatalf("end ns = %d, want %d", got, want)
 	}
-	var res loki.QueryResult
+	var res storage.QueryResult
 	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
 		t.Fatal(err)
 	}
@@ -155,8 +155,8 @@ func TestQueryRange_CursorBackward_AdjustsEndAndReturnsNextCursor(t *testing.T) 
 }
 
 func TestQueryRange_NoNextCursorWhenPageIsNotFull(t *testing.T) {
-	m := &mockLoki{result: &loki.QueryResult{
-		Lines: []loki.Line{{Time: time.Unix(0, 1234567890).UTC(), Raw: "info only"}},
+	m := &mockStorage{result: &storage.QueryResult{
+		Lines: []storage.Line{{Time: time.Unix(0, 1234567890).UTC(), Raw: "info only"}},
 		Total: 1,
 	}}
 	r := setupRouterLimit(m, 2)
@@ -167,7 +167,7 @@ func TestQueryRange_NoNextCursorWhenPageIsNotFull(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
 	}
-	var res loki.QueryResult
+	var res storage.QueryResult
 	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func TestQueryRange_NoNextCursorWhenPageIsNotFull(t *testing.T) {
 }
 
 func TestQueryRange_CursorForward_AdjustsStart(t *testing.T) {
-	m := &mockLoki{result: &loki.QueryResult{}}
+	m := &mockStorage{result: &storage.QueryResult{}}
 	r := setupRouter(m)
 	req := postQueryRange(`{"env":"prod","start":1,"end":99999,"direction":"FORWARD","cursor":"5000000000"}`)
 	w := httptest.NewRecorder()
@@ -192,7 +192,7 @@ func TestQueryRange_CursorForward_AdjustsStart(t *testing.T) {
 }
 
 func TestQueryRange_BadCursor(t *testing.T) {
-	r := setupRouter(&mockLoki{})
+	r := setupRouter(&mockStorage{})
 	req := postQueryRange(`{"env":"prod","start":1,"end":99999,"cursor":"abc"}`)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -202,7 +202,7 @@ func TestQueryRange_BadCursor(t *testing.T) {
 }
 
 func TestQueryRange_MissingFilter(t *testing.T) {
-	r := setupRouter(&mockLoki{})
+	r := setupRouter(&mockStorage{})
 	req := postQueryRange(`{"start":1,"end":99999}`)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -212,7 +212,7 @@ func TestQueryRange_MissingFilter(t *testing.T) {
 }
 
 func TestQueryRange_BadRange(t *testing.T) {
-	r := setupRouter(&mockLoki{})
+	r := setupRouter(&mockStorage{})
 	req := postQueryRange(`{"env":"prod","start":999,"end":999}`)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -222,7 +222,7 @@ func TestQueryRange_BadRange(t *testing.T) {
 }
 
 func TestQueryRange_BodyTooLarge(t *testing.T) {
-	r := setupRouter(&mockLoki{})
+	r := setupRouter(&mockStorage{})
 	req := postQueryRange(`{"env":"prod","start":1,"end":99999,"keyword":"` + strings.Repeat("x", int(maxQueryRangeBodyBytes)) + `"}`)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -232,7 +232,7 @@ func TestQueryRange_BodyTooLarge(t *testing.T) {
 }
 
 func TestQueryRange_LokiError_502(t *testing.T) {
-	m := &mockLoki{err: context.DeadlineExceeded}
+	m := &mockStorage{err: context.DeadlineExceeded}
 	r := setupRouter(m)
 	req := postQueryRange(`{"env":"prod","start":1,"end":99999}`)
 	w := httptest.NewRecorder()
@@ -240,13 +240,13 @@ func TestQueryRange_LokiError_502(t *testing.T) {
 	if w.Code != http.StatusBadGateway {
 		t.Fatalf("status = %d, want 502", w.Code)
 	}
-	if !strings.Contains(w.Body.String(), "Loki") {
-		t.Errorf("body should mention Loki: %s", w.Body.String())
+	if !strings.Contains(w.Body.String(), "Storage") {
+		t.Errorf("body should mention Storage: %s", w.Body.String())
 	}
 }
 
 func TestQueryRange_LokiHTTPError_400(t *testing.T) {
-	m := &mockLoki{err: &loki.HTTPError{StatusCode: http.StatusBadRequest, Message: "parse error"}}
+	m := &mockStorage{err: &storage.HTTPError{StatusCode: http.StatusBadRequest, Message: "parse error"}}
 	r := setupRouter(m)
 	req := postQueryRange(`{"env":"prod","start":1,"end":99999}`)
 	w := httptest.NewRecorder()
@@ -254,8 +254,8 @@ func TestQueryRange_LokiHTTPError_400(t *testing.T) {
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", w.Code)
 	}
-	if !strings.Contains(w.Body.String(), "Loki") {
-		t.Errorf("body should mention Loki: %s", w.Body.String())
+	if !strings.Contains(w.Body.String(), "Storage") {
+		t.Errorf("body should mention Storage: %s", w.Body.String())
 	}
 	var resp map[string]interface{}
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
@@ -268,7 +268,7 @@ func TestQueryRange_LokiHTTPError_400(t *testing.T) {
 
 func TestQueryRange_LokiHTTPError_502(t *testing.T) {
 	// 5xx errors from Loki should still return 502
-	m := &mockLoki{err: &loki.HTTPError{StatusCode: http.StatusServiceUnavailable, Message: "Loki overloaded"}}
+	m := &mockStorage{err: &storage.HTTPError{StatusCode: http.StatusServiceUnavailable, Message: "Loki overloaded"}}
 	r := setupRouter(m)
 	req := postQueryRange(`{"env":"prod","start":1,"end":99999}`)
 	w := httptest.NewRecorder()
