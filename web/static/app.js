@@ -187,10 +187,23 @@ function syncClearButtons() {
   $(id).addEventListener("blur", (e) => { e.target.value = e.target.value.trim(); });
 });
 
+let inputComposing = false;
+let inputCompositionJustEnded = false;
+document.addEventListener("compositionstart", (e) => {
+  if (e.target && e.target.tagName === "INPUT") inputComposing = true;
+});
+document.addEventListener("compositionend", (e) => {
+  if (!e.target || e.target.tagName !== "INPUT") return;
+  inputComposing = false;
+  inputCompositionJustEnded = true;
+  setTimeout(() => { inputCompositionJustEnded = false; }, 0);
+});
+
 // 在输入框(关键词/链路id/时间)内按回车即查询,与点"查询"按钮等价;
+// 输入法组合输入期间的回车仅确认候选字,不触发查询。
 // 仅响应 INPUT(按钮/选项卡走原生激活,避免重复触发)。
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && e.target.tagName === "INPUT") search();
+  if (shouldSubmitInputEnter(e, inputComposing || inputCompositionJustEnded)) search();
 });
 
 function activeTabValue(id) {
