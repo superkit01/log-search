@@ -39,7 +39,7 @@ func TestQueryRange_ParsesStreams(t *testing.T) {
 		  }
 		}`)
 	})
-	res, err := c.QueryRange(context.Background(), `{app="nginx"}`, time.Unix(0, 0), time.Unix(0, 0).Add(time.Hour), 100, Backward)
+	res, err := c.QueryRange(context.Background(), storage.QueryFilters{App: "nginx"}, time.Unix(0, 0), time.Unix(0, 0).Add(time.Hour), 100, Backward)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestQueryRange_MergesStructuredMetadataIntoLabels(t *testing.T) {
 		  }
 		}`)
 	})
-	res, err := c.QueryRange(context.Background(), `{app="alarm"}`, time.Unix(0, 0), time.Unix(0, 0).Add(time.Hour), 100, Backward)
+	res, err := c.QueryRange(context.Background(), storage.QueryFilters{App: "alarm"}, time.Unix(0, 0), time.Unix(0, 0).Add(time.Hour), 100, Backward)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestQueryRange_SortsAcrossStreams(t *testing.T) {
 			c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 				fmt.Fprint(w, body)
 			})
-			res, err := c.QueryRange(context.Background(), `{app="a"}`, time.Unix(0, 0), time.Unix(0, 0).Add(time.Hour), 100, tc.dir)
+			res, err := c.QueryRange(context.Background(), storage.QueryFilters{App: "a"}, time.Unix(0, 0), time.Unix(0, 0).Add(time.Hour), 100, tc.dir)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -135,7 +135,7 @@ func TestQueryRange_LokiError(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, `{"status":"error","errorType":"bad_data","error":"parse error at col 1"}`)
 	})
-	_, err := c.QueryRange(context.Background(), `{`, time.Unix(0, 0), time.Unix(0, 0).Add(time.Hour), 100, Backward)
+	_, err := c.QueryRange(context.Background(), storage.QueryFilters{App: "nginx"}, time.Unix(0, 0), time.Unix(0, 0).Add(time.Hour), 100, Backward)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -152,7 +152,7 @@ func TestQueryRange_PlainTextError(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, "parse error at line 1, col 2: syntax error: unexpected IDENTIFIER")
 	})
-	_, err := c.QueryRange(context.Background(), `{app="nginx"}`, time.Unix(0, 0), time.Unix(0, 0).Add(time.Hour), 100, Backward)
+	_, err := c.QueryRange(context.Background(), storage.QueryFilters{App: "nginx"}, time.Unix(0, 0), time.Unix(0, 0).Add(time.Hour), 100, Backward)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -173,7 +173,7 @@ func TestQueryRange_ReturnsHTTPError(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 		fmt.Fprint(w, `{"status":"error","errorType":"bad_data","error":"parse error at col 1"}`)
 	})
-	_, err := c.QueryRange(context.Background(), `{`, time.Unix(0, 0), time.Unix(0, 0).Add(time.Hour), 100, Backward)
+	_, err := c.QueryRange(context.Background(), storage.QueryFilters{App: "nginx"}, time.Unix(0, 0), time.Unix(0, 0).Add(time.Hour), 100, Backward)
 	if err == nil {
 		t.Fatal("expected error")
 	}

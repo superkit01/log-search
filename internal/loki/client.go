@@ -18,7 +18,7 @@ import (
 
 // Client 抽象 Loki 查询能力,便于测试注入 mock。
 type Client interface {
-	QueryRange(ctx context.Context, query string, start, end time.Time, limit int, direction Direction) (*QueryResult, error)
+	QueryRange(ctx context.Context, filters storage.QueryFilters, start, end time.Time, limit int, direction Direction) (*QueryResult, error)
 }
 
 type httpClient struct {
@@ -34,9 +34,13 @@ func NewHTTPClient(rawURL string, timeout time.Duration) Client {
 	}
 }
 
-func (c *httpClient) QueryRange(ctx context.Context, query string, start, end time.Time, limit int, direction Direction) (*QueryResult, error) {
+func (c *httpClient) QueryRange(ctx context.Context, filters storage.QueryFilters, start, end time.Time, limit int, direction Direction) (*QueryResult, error) {
+	query, err := buildLogQL(filters)
+	if err != nil {
+		return nil, err
+	}
 	var qr queryRangeResponse
-	err := c.get(ctx, "/loki/api/v1/query_range", url.Values{
+	err = c.get(ctx, "/loki/api/v1/query_range", url.Values{
 		"query":     {query},
 		"start":     {strconv.FormatInt(start.UnixNano(), 10)},
 		"end":       {strconv.FormatInt(end.UnixNano(), 10)},

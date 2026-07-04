@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -15,17 +16,17 @@ import (
 )
 
 type mockStorage struct {
-	result    *storage.QueryResult
-	err       error
-	lastQuery string
-	lastStart time.Time
-	lastEnd   time.Time
-	lastLimit int
-	lastDir   storage.Direction
+	result      *storage.QueryResult
+	err         error
+	lastFilters storage.QueryFilters
+	lastStart   time.Time
+	lastEnd     time.Time
+	lastLimit   int
+	lastDir     storage.Direction
 }
 
-func (m *mockStorage) QueryRange(ctx context.Context, query string, start, end time.Time, limit int, direction storage.Direction) (*storage.QueryResult, error) {
-	m.lastQuery = query
+func (m *mockStorage) QueryRange(ctx context.Context, filters storage.QueryFilters, start, end time.Time, limit int, direction storage.Direction) (*storage.QueryResult, error) {
+	m.lastFilters = filters
 	m.lastStart = start
 	m.lastEnd = end
 	m.lastLimit = limit
@@ -70,8 +71,15 @@ func TestQueryRange_OK_FillsLevel(t *testing.T) {
 	if len(res.Lines) != 1 || res.Lines[0].Level != "error" {
 		t.Errorf("unexpected result: %+v", res)
 	}
-	if m.lastQuery != `{env="prod", app="api", level=~"(?i)warn|error"} |= "timeout" | tid="abc123"` {
-		t.Fatalf("query = %q", m.lastQuery)
+	wantFilters := storage.QueryFilters{
+		Env:     "prod",
+		App:     "api",
+		Levels:  []string{"warn", "error"},
+		Keyword: "timeout",
+		TraceID: "abc123",
+	}
+	if !reflect.DeepEqual(m.lastFilters, wantFilters) {
+		t.Fatalf("filters = %#v, want %#v", m.lastFilters, wantFilters)
 	}
 	if m.lastLimit != 1000 {
 		t.Fatalf("limit = %d, want 1000", m.lastLimit)

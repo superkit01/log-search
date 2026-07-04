@@ -28,21 +28,21 @@ Before first run: `cp config.example.yaml config.yaml`, choose `storage.type` (`
 
 ## Architecture
 
-Request flow: **browser JSON filters → `internal/web` handler builds a LogQL-style query → `internal/storage.Client` implementation → Loki HTTP API or ES `_search` → normalize lines/tags → JSON → browser**.
+Request flow: **browser JSON filters → `internal/web` validates range/pagination → `internal/storage.Client` implementation builds backend query → Loki HTTP API or ES `_search` → normalize lines/tags → JSON → browser**.
 
 The layering is intentional and each boundary matters:
 
 - **`internal/config`** — `Load(path)` reads YAML, expands `${VAR}` / `${VAR:-default}`, then `validate()` both checks and **applies defaults** (`:8080`, `30s`, 1000). `storage.type` defaults to `loki`; valid tracked values are `loki` and `es`. Validation mutates the receiver. Invalid config is fail-fast — `main` exits 1.
 - **`internal/storage`** — owns the backend-neutral `Client` interface, `Line`, `QueryResult`, `Direction`, and `HTTPError`. Web handlers depend on this package, not on a concrete Loki/ES client.
 - **`internal/loki`** — talks to Loki over plain `net/http` (no Loki client library). Start/end are sent to Loki as **nanosecond** unix (`UnixNano()`), even though the API accepts seconds. It flattens streams and merges returned labels/structured metadata into `Line.Labels`.
-- **`internal/elasticsearch`** — parses the web-layer LogQL-style query and converts it to ES DSL, then calls `/{index}/_search`. It expects documents with top-level `@timestamp`, `message`, `env`, `app`, `level`, and optional `tid`. Exact label filters use `.keyword` fields. Index patterns without `{...}` (for example `logs-*`) pass through unchanged; `{yyyy.MM.dd}` style patterns are date-expanded.
-- **`internal/web`** — Gin handlers. It owns browser query JSON validation, LogQL-style query construction, cursor adjustment, and response shaping. `handler.queryRange` copies `labels["level"]` into `Line.Level` before responding and allowlists visible tags.
+- **`internal/elasticsearch`** — converts `storage.QueryFilters` directly to ES DSL, then calls `/{index}/_search`. It expects documents with top-level `@timestamp`, `message`, `env`, `app`, `level`, and optional `tid`. Exact label filters use `.keyword` fields; keyword search uses `match_phrase` on `message`. Index patterns without `{...}` (for example `logs-*`) pass through unchanged; `{yyyy.MM.dd}` style patterns are date-expanded.
+- **`internal/web`** — Gin handlers. It owns browser query JSON validation, cursor adjustment, and response shaping. It passes `storage.QueryFilters` to the active backend and does not build Loki LogQL. `handler.queryRange` copies `labels["level"]` into `Line.Level` before responding and allowlists visible tags.
 
 ### Contracts that are easy to break
 
 1. **Error status mapping** lives in `web.storageStatusAndBody` (handler.go). A `*storage.HTTPError` with a 4xx status passes through as the **same 4xx** (e.g. a bad query response from storage → 400 to the browser); everything else (network/timeout/5xx) → **502**. Storage clients should return `&storage.HTTPError` only for non-success HTTP responses; transport failures should remain plain wrapped errors so they stay 502. If you change error handling in either package, keep this split intact and covered by tests.
 
-2. **`/api/query_range` is POST JSON.** The browser sends filters (`env`, `app`, `levels`, `keyword`, `traceId`, `start`, `end`, `direction`, optional `cursor`) and the web layer builds a LogQL-style query. The backend owns `limit` from config and returns `QueryResult` **directly**: `{"lines":[{ts,level,line,labels}], "total":N}`. Don't wrap it in `data`, and don't move query construction or limit selection back to the browser.
+2. **`/api/query_range` is POST JSON.** The browser sends filters (`env`, `app`, `levels`, `keyword`, `traceId`, `start`, `end`, `direction`, optional `cursor`) and the web layer forwards structured `storage.QueryFilters` to the active backend. The backend owns concrete query construction and `limit` comes from config. The response is `QueryResult` **directly**: `{"lines":[{ts,level,line,labels}], "total":N}`. Don't wrap it in `data`, and don't move Loki LogQL or ES DSL construction back to the browser.
 
 3. **Visible line tags are allowlisted.** `handler.queryRange` returns only `env`, `app`, `level`, and `tid` in `Line.Labels`; add future tags through `logTagKeys`. `tid` is expected to be Loki structured metadata when using Loki, queried with the LogQL pipeline filter `| tid="..."`, not a stream selector label. With ES, `tid` is a normal document field queried as `tid.keyword`.
 

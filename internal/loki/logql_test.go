@@ -1,16 +1,20 @@
-package web
+package loki
 
-import "testing"
+import (
+	"testing"
+
+	"log-search/internal/storage"
+)
 
 func TestBuildLogQL(t *testing.T) {
 	tests := []struct {
-		name string
-		req  queryRangeRequest
-		want string
+		name    string
+		filters storage.QueryFilters
+		want    string
 	}{
 		{
 			name: "env app levels keyword trace",
-			req: queryRangeRequest{
+			filters: storage.QueryFilters{
 				Env:     "prod",
 				App:     "api",
 				Levels:  []string{"info", "warn", "error"},
@@ -20,23 +24,18 @@ func TestBuildLogQL(t *testing.T) {
 			want: `{env="prod", app="api", level=~"(?i)info|warn|error"} |= "timeout" | tid="t1"`,
 		},
 		{
-			name: "all levels omitted",
-			req: queryRangeRequest{
-				Env:    "prod",
-				Levels: nil,
-			},
-			want: `{env="prod"}`,
+			name:    "all levels omitted",
+			filters: storage.QueryFilters{Env: "prod"},
+			want:    `{env="prod"}`,
 		},
 		{
-			name: "level only",
-			req: queryRangeRequest{
-				Levels: []string{"warn"},
-			},
-			want: `{level=~"(?i)warn"}`,
+			name:    "level only",
+			filters: storage.QueryFilters{Levels: []string{"warn"}},
+			want:    `{level=~"(?i)warn"}`,
 		},
 		{
 			name: "escapes values",
-			req: queryRangeRequest{
+			filters: storage.QueryFilters{
 				Env:     `pro"d`,
 				App:     `a\b`,
 				Keyword: `c"d`,
@@ -46,7 +45,7 @@ func TestBuildLogQL(t *testing.T) {
 		},
 		{
 			name: "invalid level ignored",
-			req: queryRangeRequest{
+			filters: storage.QueryFilters{
 				Env:    "prod",
 				Levels: []string{"bad", "error"},
 			},
@@ -56,7 +55,7 @@ func TestBuildLogQL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := buildLogQL(tt.req)
+			got, err := buildLogQL(tt.filters)
 			if err != nil {
 				t.Fatalf("buildLogQL error: %v", err)
 			}
@@ -67,8 +66,8 @@ func TestBuildLogQL(t *testing.T) {
 	}
 }
 
-func TestBuildLogQL_RequiresSelector(t *testing.T) {
-	_, err := buildLogQL(queryRangeRequest{Keyword: "timeout", TraceID: "t1"})
+func TestBuildLogQLRequiresSelector(t *testing.T) {
+	_, err := buildLogQL(storage.QueryFilters{Keyword: "timeout", TraceID: "t1"})
 	if err == nil {
 		t.Fatal("expected error for missing selector filters")
 	}

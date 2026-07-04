@@ -13,9 +13,8 @@ import (
 	"log-search/internal/storage"
 )
 
-// Client 抽象 ES 查询能力,便于测试注入 mock。
 type Client interface {
-	QueryRange(ctx context.Context, query string, start, end time.Time, limit int, direction storage.Direction) (*storage.QueryResult, error)
+	QueryRange(ctx context.Context, filters storage.QueryFilters, start, end time.Time, limit int, direction storage.Direction) (*storage.QueryResult, error)
 }
 
 type httpClient struct {
@@ -33,20 +32,8 @@ func NewHTTPClient(rawURL string, index string, timeout time.Duration) Client {
 	}
 }
 
-func (c *httpClient) QueryRange(ctx context.Context, query string, start, end time.Time, limit int, direction storage.Direction) (*storage.QueryResult, error) {
-	// 解析 LogQL 查询
-	parsed, err := ParseLogQL(query)
-	if err != nil {
-		return nil, fmt.Errorf("parse LogQL: %w", err)
-	}
-
-	// 构建 ES 查询
-	esQuery, err := ToESQuery(parsed)
-	if err != nil {
-		return nil, fmt.Errorf("build ES query: %w", err)
-	}
-
-	// 添加时间范围
+func (c *httpClient) QueryRange(ctx context.Context, filters storage.QueryFilters, start, end time.Time, limit int, direction storage.Direction) (*storage.QueryResult, error) {
+	esQuery := buildESQuery(filters)
 	boolQuery := esQuery["bool"].(map[string]interface{})
 	mustList := boolQuery["must"].([]interface{})
 
@@ -71,13 +58,13 @@ func (c *httpClient) QueryRange(ctx context.Context, query string, start, end ti
 	}
 
 	var result searchResult
-	err = c.search(ctx, buildTimeRangeIndex(c.index, start, end), searchBody, &result)
+	err := c.search(ctx, buildTimeRangeIndex(c.index, start, end), searchBody, &result)
 	if err != nil {
 		return nil, err
 	}
 
 	// 转换结果
-	return c.convertResult(result, parsed)
+	return c.convertResult(result)
 }
 
 func sortOrder(direction storage.Direction) string {
@@ -133,7 +120,7 @@ func (c *httpClient) search(ctx context.Context, index string, body map[string]i
 	return nil
 }
 
-func (c *httpClient) convertResult(result searchResult, parsed *ParsedQuery) (*storage.QueryResult, error) {
+func (c *httpClient) convertResult(result searchResult) (*storage.QueryResult, error) {
 	res := &storage.QueryResult{}
 
 	for _, hit := range result.Hits.Hits {

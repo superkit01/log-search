@@ -63,9 +63,9 @@ func (h *Handler) queryRange(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "request body must be valid JSON"})
 		return
 	}
-	query, err := buildLogQL(req)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	filters := req.filters()
+	if !filters.HasSelector() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one of env, app, or levels is required"})
 		return
 	}
 	start, end, ok := parseRange(c, req.Start, req.End)
@@ -93,9 +93,9 @@ func (h *Handler) queryRange(c *gin.Context) {
 			return
 		}
 	}
-	log.Printf("[Loki Query] query=%q start=%s end=%s limit=%d direction=%s cursor=%s",
-		query, start.Format(time.RFC3339), end.Format(time.RFC3339), limit, direction, req.Cursor)
-	res, err := h.Client.QueryRange(c.Request.Context(), query, start, end, limit, direction)
+	log.Printf("[Storage Query] filters=%+v start=%s end=%s limit=%d direction=%s cursor=%s",
+		filters, start.Format(time.RFC3339), end.Format(time.RFC3339), limit, direction, req.Cursor)
+	res, err := h.Client.QueryRange(c.Request.Context(), filters, start, end, limit, direction)
 	if err != nil {
 		status, body := storageStatusAndBody(err)
 		log.Printf("[Storage Error] %s %s: %v", c.Request.Method, c.Request.URL.Path, err)
