@@ -5,15 +5,15 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
+	"log-search/internal/config"
 	"log-search/internal/logparse"
 	"log-search/internal/loki"
 
 	"github.com/gin-gonic/gin"
 )
-
-const maxLimit = 5000
 
 // Handler 持有 Loki 客户端与默认 limit。
 type Handler struct {
@@ -22,22 +22,17 @@ type Handler struct {
 	UI    UIOptions
 }
 
-type UIOptions struct {
-	Envs []Choice
-	Apps []string
-}
+type UIOptions = config.UICfg
 
-type Choice struct {
-	Label string
-	Value string
-}
+type Choice = config.UIOption
 
 // New 创建 Handler。
 func New(lc loki.Client, defaultLimit int, ui ...UIOptions) *Handler {
-	opts := defaultUIOptions()
+	opts := UIOptions(config.DefaultUICfg())
 	if len(ui) > 0 {
 		opts = ui[0]
 	}
+	opts = normalizeUIOptions(opts)
 	return &Handler{Loki: lc, Limit: defaultLimit, UI: opts}
 }
 
@@ -45,68 +40,51 @@ func New(lc loki.Client, defaultLimit int, ui ...UIOptions) *Handler {
 func (h *Handler) Register(r *gin.Engine) {
 	r.GET("/", h.index)
 	api := r.Group("/api")
-	api.GET("/labels", h.labels)
-	api.GET("/label/:name/values", h.labelValues)
-	api.GET("/query_range", h.queryRange)
+	api.POST("/query_range", h.queryRange)
 }
 
 func (h *Handler) index(c *gin.Context) {
 	c.HTML(http.StatusOK, "index.html", gin.H{
-		"defaultLimit": h.Limit,
-		"envs":         h.UI.Envs,
-		"apps":         h.UI.Apps,
+		"envs": h.UI.Envs,
+		"apps": h.UI.Apps,
 	})
 }
 
-func defaultUIOptions() UIOptions {
-	return UIOptions{Envs: []Choice{
-		{Label: "演示", Value: "demo"},
-	}}
-}
-
-func (h *Handler) labels(c *gin.Context) {
-	start, end, ok := parseRange(c)
-	if !ok {
-		return
+func normalizeUIOptions(opts UIOptions) UIOptions {
+	if len(opts.Envs) == 0 {
+		opts.Envs = config.DefaultUICfg().Envs
 	}
-	labels, err := h.Loki.Labels(c.Request.Context(), start, end)
-	respondData(c, labels, err)
-}
-
-func (h *Handler) labelValues(c *gin.Context) {
-	start, end, ok := parseRange(c)
-	if !ok {
-		return
-	}
-	vals, err := h.Loki.LabelValues(c.Request.Context(), c.Param("name"), start, end)
-	respondData(c, vals, err)
+	return opts
 }
 
 func (h *Handler) queryRange(c *gin.Context) {
-	query := c.Query("query")
-	if query == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "query is required"})
+	var req queryRangeRequest
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxQueryRangeBodyBytes)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) || strings.Contains(err.Error(), "http: request body too large") {
+			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "request body too large"})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": "request body must be valid JSON"})
 		return
 	}
-	start, end, ok := parseRange(c)
+	query, err := buildLogQL(req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	start, end, ok := parseRange(c, req.Start, req.End)
 	if !ok {
 		return
 	}
 	limit := h.Limit
-	if s := c.Query("limit"); s != "" {
-		n, err := strconv.Atoi(s)
-		if err != nil || n < 1 || n > maxLimit {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be between 1 and " + strconv.Itoa(maxLimit)})
-			return
-		}
-		limit = n
-	}
 	direction := loki.Backward
-	if c.Query("direction") == string(loki.Forward) {
+	if req.Direction == string(loki.Forward) {
 		direction = loki.Forward
 	}
-	if s := c.Query("cursor"); s != "" {
-		ns, err := strconv.ParseInt(s, 10, 64)
+	if req.Cursor != "" {
+		ns, err := strconv.ParseInt(req.Cursor, 10, 64)
 		if err != nil || ns <= 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "cursor must be a positive unix nanosecond timestamp"})
 			return
@@ -130,18 +108,39 @@ func (h *Handler) queryRange(c *gin.Context) {
 	}
 	for i := range res.Lines {
 		res.Lines[i].Level = string(logparse.DetectLevel(res.Lines[i].Raw))
+		res.Lines[i].Labels = normalizeLineTags(res.Lines[i].Labels, res.Lines[i].Level)
 	}
-	if len(res.Lines) > 0 {
+	if len(res.Lines) >= limit {
 		res.NextCursor = strconv.FormatInt(res.Lines[len(res.Lines)-1].Time.UnixNano(), 10)
 	}
 	c.JSON(http.StatusOK, res)
 }
 
+const maxQueryRangeBodyBytes int64 = 16 * 1024
+
+// logTagKeys is the single allowlist for tags returned to the browser. Add new
+// keys here when the UI should display another stable Loki label.
+var logTagKeys = []string{"env", "app", "level", "tid"}
+
+func normalizeLineTags(labels map[string]string, level string) map[string]string {
+	out := make(map[string]string, len(logTagKeys))
+	for _, key := range logTagKeys {
+		if key == "level" {
+			if level != "" {
+				out[key] = level
+			}
+			continue
+		}
+		if value := labels[key]; value != "" {
+			out[key] = value
+		}
+	}
+	return out
+}
+
 // parseRange 解析 start/end(unix 秒),返回 false 表示已写入错误响应。
-func parseRange(c *gin.Context) (time.Time, time.Time, bool) {
-	start, err1 := strconv.ParseInt(c.Query("start"), 10, 64)
-	end, err2 := strconv.ParseInt(c.Query("end"), 10, 64)
-	if err1 != nil || err2 != nil {
+func parseRange(c *gin.Context, start, end int64) (time.Time, time.Time, bool) {
+	if start <= 0 || end <= 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "start and end (unix seconds) are required"})
 		return time.Time{}, time.Time{}, false
 	}
@@ -152,17 +151,6 @@ func parseRange(c *gin.Context) (time.Time, time.Time, bool) {
 		return time.Time{}, time.Time{}, false
 	}
 	return st, en, true
-}
-
-// respondData 统一处理 labels/values 的成功/失败响应。
-func respondData(c *gin.Context, data interface{}, err error) {
-	if err != nil {
-		status, body := lokiStatusAndBody(err)
-		log.Printf("[Loki Error] %s %s: %v", c.Request.Method, c.Request.URL.Path, err)
-		c.JSON(status, gin.H{"error": body})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"data": data})
 }
 
 // lokiStatusAndBody maps Loki errors to appropriate HTTP status codes and response bodies.

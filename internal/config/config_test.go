@@ -99,6 +99,17 @@ loki:
 	}
 }
 
+func TestLoad_DefaultLimitAboveMaxFails(t *testing.T) {
+	p := writeTempYAML(t, `
+loki:
+  url: "http://x:3100"
+  default_limit: 5001
+`)
+	if _, err := Load(p); err == nil {
+		t.Fatal("expected error for default_limit above max, got nil")
+	}
+}
+
 func TestLoad_EnvExpansion_Override(t *testing.T) {
 	// ${LOKI_URL:-default}:env 设了且非空时取 env
 	t.Setenv("LOKI_URL", "http://from-env:3100")

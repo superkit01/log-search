@@ -128,38 +128,6 @@ func TestQueryRange_SortsAcrossStreams(t *testing.T) {
 	}
 }
 
-func TestLabels(t *testing.T) {
-	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/loki/api/v1/labels" {
-			t.Errorf("path = %s", r.URL.Path)
-		}
-		fmt.Fprint(w, `{"status":"success","data":["app","env"]}`)
-	})
-	got, err := c.Labels(context.Background(), time.Unix(0, 0), time.Unix(0, 0).Add(time.Hour))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) != 2 || got[0] != "app" {
-		t.Errorf("labels = %v", got)
-	}
-}
-
-func TestLabelValues(t *testing.T) {
-	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/loki/api/v1/label/app/values" {
-			t.Errorf("path = %s", r.URL.Path)
-		}
-		fmt.Fprint(w, `{"status":"success","data":["nginx","api"]}`)
-	})
-	got, err := c.LabelValues(context.Background(), "app", time.Unix(0, 0), time.Unix(0, 0).Add(time.Hour))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) != 2 {
-		t.Fatalf("values = %v", got)
-	}
-}
-
 func TestQueryRange_LokiError(t *testing.T) {
 	c := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)

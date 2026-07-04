@@ -1,5 +1,6 @@
 const SHARE_KEYS = ["env", "app", "levels", "direction", "keyword", "trace_id", "start", "end"];
-const VALID_LEVELS = new Set(["debug", "info", "warn", "error"]);
+const SHARE_LEVELS = typeof LEVEL_ORDER !== "undefined" ? LEVEL_ORDER : require("./levels.js").LEVEL_ORDER;
+const VALID_LEVELS = new Set(SHARE_LEVELS);
 const VALID_DIRECTIONS = new Set(["BACKWARD", "FORWARD"]);
 
 function normalizeText(v) {

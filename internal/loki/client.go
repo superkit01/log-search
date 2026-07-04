@@ -25,8 +25,6 @@ func (e *HTTPError) Error() string {
 
 // Client 抽象 Loki 查询能力,便于测试注入 mock。
 type Client interface {
-	Labels(ctx context.Context, start, end time.Time) ([]string, error)
-	LabelValues(ctx context.Context, name string, start, end time.Time) ([]string, error)
 	QueryRange(ctx context.Context, query string, start, end time.Time, limit int, direction Direction) (*QueryResult, error)
 }
 
@@ -41,25 +39,6 @@ func NewHTTPClient(rawURL string, timeout time.Duration) Client {
 		baseURL: strings.TrimRight(rawURL, "/"),
 		h:       &http.Client{Timeout: timeout},
 	}
-}
-
-func (c *httpClient) Labels(ctx context.Context, start, end time.Time) ([]string, error) {
-	var out []string
-	err := c.get(ctx, "/loki/api/v1/labels", url.Values{
-		"start": {strconv.FormatInt(start.UnixNano(), 10)},
-		"end":   {strconv.FormatInt(end.UnixNano(), 10)},
-	}, &out)
-	return out, err
-}
-
-func (c *httpClient) LabelValues(ctx context.Context, name string, start, end time.Time) ([]string, error) {
-	var out []string
-	path := fmt.Sprintf("/loki/api/v1/label/%s/values", url.PathEscape(name))
-	err := c.get(ctx, path, url.Values{
-		"start": {strconv.FormatInt(start.UnixNano(), 10)},
-		"end":   {strconv.FormatInt(end.UnixNano(), 10)},
-	}, &out)
-	return out, err
 }
 
 func (c *httpClient) QueryRange(ctx context.Context, query string, start, end time.Time, limit int, direction Direction) (*QueryResult, error) {

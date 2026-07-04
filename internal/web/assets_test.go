@@ -39,6 +39,15 @@ func TestMountAssets_ServesIndexAndStatic(t *testing.T) {
 	if !strings.Contains(w.Body.String(), `value="boeet-alarm"`) {
 		t.Errorf("GET / body missing configured app: %s", w.Body.String())
 	}
+	if strings.Contains(w.Body.String(), `LOG_SEARCH_CONFIG`) || strings.Contains(w.Body.String(), `defaultLimit`) {
+		t.Errorf("GET / body should not expose default limit: %s", w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "https://cdn.jsdelivr.net") {
+		t.Errorf("GET / body should use embedded Chart.js, got CDN reference: %s", w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `/static/chart.umd.min.js`) {
+		t.Errorf("GET / body missing embedded Chart.js reference: %s", w.Body.String())
+	}
 
 	req2 := httptest.NewRequest(http.MethodGet, "/static/app.js", nil)
 	w2 := httptest.NewRecorder()
@@ -48,5 +57,24 @@ func TestMountAssets_ServesIndexAndStatic(t *testing.T) {
 	}
 	if !strings.Contains(w2.Body.String(), "search") {
 		t.Errorf("GET /static/app.js body unexpected: %s", w2.Body.String())
+	}
+}
+
+func TestIndex_EmptyUIOptionsFallsBackToDefaultEnv(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	if err := MountAssets(r, assets.FS); err != nil {
+		t.Fatalf("MountAssets: %v", err)
+	}
+	New(&mockLoki{}, 1000, UIOptions{}).Register(r)
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET / status = %d, want 200", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), `data-value="demo"`) {
+		t.Errorf("GET / body missing fallback env: %s", w.Body.String())
 	}
 }

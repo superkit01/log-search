@@ -2,11 +2,12 @@ const $ = (id) => document.getElementById(id);
 let chart;
 let currentLines = [];
 let nextCursor = "";
-let lastQueryURL = "";
+let lastQueryPayload = null;
 let isLoadingMore = false;
-const FILTERS_KEY = "log-search:filters"; // localStorage 键:存 {env, level}
+const FILTERS_KEY = "log-search:filters"; // localStorage 键:存 {env, levels, direction}
 const THEME_KEY = "log-search:theme"; // localStorage 键:存主题
-const QUERY_LIMIT = 500;
+const DEFAULT_LEVELS = LEVEL_ORDER.slice();
+const CHART_LEVELS = LEVEL_ORDER.slice().reverse();
 
 // 主题切换
 function toggleTheme() {
@@ -42,8 +43,12 @@ function toUnix(inputVal) {
   return Math.floor(new Date(inputVal).getTime() / 1000);
 }
 
-async function api(path) {
-  const r = await fetch(path);
+async function apiJSON(path, payload) {
+  const r = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
   const j = await r.json();
   if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
   return j;
@@ -69,7 +74,7 @@ function saveFilters() {
 
 // loadFilters 从 localStorage 恢复 env、level、direction;无记录或解析失败用默认值(env=首个配置项、level 全选、direction=BACKWARD)。
 function loadFilters() {
-  let env = "", levels = ["debug", "info", "warn", "error"], direction = "";
+  let env = "", levels = DEFAULT_LEVELS, direction = "";
   try {
     const raw = localStorage.getItem(FILTERS_KEY);
     if (raw) {
@@ -268,27 +273,22 @@ async function search(options) {
   currentLines = [];
   nextCursor = "";
   isLoadingMore = false;
+  lastQueryPayload = null;
   const envTab = document.querySelector("#env-tabs .env-tab.active");
   const env = envTab ? envTab.dataset.value : "";
   const app = $("app-select").value;
   const levels = queryLevels();
-  const chips = [];
-  if (env) chips.push({ label: "env", value: env });
-  if (app) chips.push({ label: "app", value: app });
   const keyword = $("keyword").value.trim();
   const traceId = $("trace-id").value.trim();
-  const query = buildLogQL(chips, keyword, traceId, levels);
-  if (!query) { showError("请至少选择环境、应用或级别"); return; }
+  if (!env && !app && levels.length === 0) { showError("请至少选择环境、应用或级别"); return; }
   const start = toUnix($("start").value);
   const end = toUnix($("end").value);
   if (!start || !end) { showError("请选择时间范围"); return; }
-  const limit = QUERY_LIMIT;
   const direction = activeTabValue("direction-tabs") || "BACKWARD";
-  const url = "/api/query_range?query=" + encodeURIComponent(query) +
-    "&start=" + start + "&end=" + end + "&limit=" + limit + "&direction=" + direction;
-  lastQueryURL = url;
+  const payload = { env, app, levels, keyword, traceId, start, end, direction };
+  lastQueryPayload = payload;
   try {
-    const j = await api(url);
+    const j = await apiJSON("/api/query_range", payload);
     applyQueryResult(j, false);
   } catch (e) {
     showError(e.message);
@@ -296,12 +296,11 @@ async function search(options) {
 }
 
 async function loadMore() {
-  if (!lastQueryURL || !nextCursor || isLoadingMore) return;
+  if (!lastQueryPayload || !nextCursor || isLoadingMore) return;
   hideError();
   isLoadingMore = true;
   try {
-    const sep = lastQueryURL.includes("?") ? "&" : "?";
-    const j = await api(lastQueryURL + sep + "cursor=" + encodeURIComponent(nextCursor));
+    const j = await apiJSON("/api/query_range", { ...lastQueryPayload, cursor: nextCursor });
     applyQueryResult(j, true);
   } catch (e) {
     showError(e.message);
@@ -327,7 +326,6 @@ function applyQueryResult(res, append) {
   nextCursor = res.nextCursor || "";
   renderResults(currentLines, lines, append);
   renderChart(currentLines);
-  if (lines.length < QUERY_LIMIT) nextCursor = "";
   scheduleAutoLoadCheck();
 }
 
@@ -468,7 +466,7 @@ function makeCopyableTag(key, value, extraClass, line) {
   tag.textContent = key + ": " + value;
   tag.dataset.key = key;
   tag.dataset.value = String(value);
-  if (key === "trace_id") {
+  if (key === "tid") {
     tag.title = "打开链路日志";
     tag.addEventListener("click", () => openTraceDrilldown(line, String(value)));
   } else {
@@ -518,20 +516,19 @@ async function copyText(text, target) {
 const TAG_PALETTE = ["tag-c0", "tag-c1", "tag-c2", "tag-c3", "tag-c4", "tag-c5", "tag-c6"];
 
 function renderChart(lines) {
-  const levels = ["error", "warn", "info", "debug"];
   const colors = { error: "#ff6b6b", warn: "#ffd166", info: "#69c0ff", debug: "#888" };
   const buckets = {};
   lines.forEach((l) => {
     const d = new Date(l.ts);
     d.setSeconds(0, 0);
     const key = d.getTime();
-    const lvl = levels.includes(l.level) ? l.level : "info";
-    buckets[key] = buckets[key] || { error: 0, warn: 0, info: 0, debug: 0 };
+    const lvl = CHART_LEVELS.includes(l.level) ? l.level : "info";
+    buckets[key] = buckets[key] || emptyLevelBucket();
     buckets[key][lvl]++;
   });
   const keys = Object.keys(buckets).map(Number).sort((a, b) => a - b);
   const labels = keys.map((k) => new Date(k).toLocaleTimeString());
-  const datasets = levels.map((lvl) => ({
+  const datasets = CHART_LEVELS.map((lvl) => ({
     label: lvl,
     stack: "s",
     backgroundColor: colors[lvl],
@@ -551,6 +548,10 @@ function renderChart(lines) {
       },
     },
   });
+}
+
+function emptyLevelBucket() {
+  return Object.fromEntries(LEVEL_ORDER.map((lvl) => [lvl, 0]));
 }
 
 async function init() {

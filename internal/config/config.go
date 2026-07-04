@@ -27,6 +27,11 @@ type LokiCfg struct {
 	DefaultLimit int    `yaml:"default_limit"`
 }
 
+const (
+	DefaultQueryLimit = 1000
+	MaxQueryLimit     = 5000
+)
+
 type UICfg struct {
 	Envs []UIOption `yaml:"envs"`
 	Apps []string   `yaml:"apps"`
@@ -35,6 +40,12 @@ type UICfg struct {
 type UIOption struct {
 	Label string `yaml:"label"`
 	Value string `yaml:"value"`
+}
+
+func DefaultUICfg() UICfg {
+	return UICfg{Envs: []UIOption{
+		{Label: "演示", Value: "demo"},
+	}}
 }
 
 // Duration 解析 timeout 字符串为 time.Duration。
@@ -103,15 +114,16 @@ func (c *Config) validate() error {
 		return fmt.Errorf("loki.timeout invalid %q: %w", c.Loki.Timeout, err)
 	}
 	if c.Loki.DefaultLimit <= 0 {
-		c.Loki.DefaultLimit = 1000
+		c.Loki.DefaultLimit = DefaultQueryLimit
+	}
+	if c.Loki.DefaultLimit > MaxQueryLimit {
+		return fmt.Errorf("loki.default_limit must be between 1 and %d", MaxQueryLimit)
 	}
 	if c.Server.Addr == "" {
 		c.Server.Addr = ":8080"
 	}
 	if len(c.UI.Envs) == 0 {
-		c.UI.Envs = []UIOption{
-			{Label: "演示", Value: "demo"},
-		}
+		c.UI.Envs = DefaultUICfg().Envs
 	}
 	for i := range c.UI.Envs {
 		c.UI.Envs[i].Label = strings.TrimSpace(c.UI.Envs[i].Label)
