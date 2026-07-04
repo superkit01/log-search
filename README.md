@@ -18,6 +18,7 @@
 - **配置化选项**:环境选项和应用下拉从 `config.yaml` 的 `ui.envs` / `ui.apps` 读取。
 - **后端生成查询**:浏览器向 `/api/query_range` 发送 JSON 筛选条件;Web 层负责校验、设置 limit、处理游标分页。Loki 后端根据筛选条件构造 LogQL;ES 后端根据同一组 JSON 字段直接构造 ES DSL。
 - **链路筛选**:`tid` 在 Loki 中按 structured metadata 查询,LogQL 形如 `| tid="..."`,不是 stream label selector;ES 后端按文档字段 `tid.keyword` 查询。
+- **关键词查询**:关键词默认匹配日志正文;支持 `a && b` 表示同时包含两个条件,支持 `a || b` 表示包含任意一个条件。Loki 后端会生成多个 line filter 或正则 line filter;ES 后端会对 `message` 字段生成 `match_phrase` 查询。
 - **标签展示**:结果行只展示 `env`、`app`、`level`、`tid` 四类 tags;后续扩展从后端 allowlist 增加。
 - **时间范围**:开始/结束时间,默认今天 `00:00` 到今天 `23:59`;支持 `1h`、`3h`、`今天` 快捷设置;时间框不允许清空(清空会自动回填默认时间)。
 - **首次打开默认**:环境=第一个配置项(未配置时为“演示”)、级别全选、方向=倒序。已选条件记在浏览器(localStorage),老用户下次打开沿用上次选择。

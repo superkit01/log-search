@@ -44,3 +44,44 @@ func TestBuildESQueryIgnoresInvalidLevels(t *testing.T) {
 		t.Fatalf("must = %#v, want %#v", must, want)
 	}
 }
+
+func TestBuildESQueryKeywordAnd(t *testing.T) {
+	got := buildESQuery(storage.QueryFilters{
+		Env:     "test",
+		Keyword: "timeout && retry",
+	})
+
+	must := got["bool"].(map[string]interface{})["must"].([]interface{})
+	want := []interface{}{
+		map[string]interface{}{"term": map[string]interface{}{"env.keyword": "test"}},
+		map[string]interface{}{"match_phrase": map[string]interface{}{"message": "timeout"}},
+		map[string]interface{}{"match_phrase": map[string]interface{}{"message": "retry"}},
+	}
+	if !reflect.DeepEqual(must, want) {
+		t.Fatalf("must = %#v, want %#v", must, want)
+	}
+}
+
+func TestBuildESQueryKeywordOr(t *testing.T) {
+	got := buildESQuery(storage.QueryFilters{
+		Env:     "test",
+		Keyword: "timeout || retry",
+	})
+
+	must := got["bool"].(map[string]interface{})["must"].([]interface{})
+	want := []interface{}{
+		map[string]interface{}{"term": map[string]interface{}{"env.keyword": "test"}},
+		map[string]interface{}{
+			"bool": map[string]interface{}{
+				"should": []interface{}{
+					map[string]interface{}{"match_phrase": map[string]interface{}{"message": "timeout"}},
+					map[string]interface{}{"match_phrase": map[string]interface{}{"message": "retry"}},
+				},
+				"minimum_should_match": 1,
+			},
+		},
+	}
+	if !reflect.DeepEqual(must, want) {
+		t.Fatalf("must = %#v, want %#v", must, want)
+	}
+}

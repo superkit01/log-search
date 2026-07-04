@@ -22,6 +22,59 @@ type QueryFilters struct {
 	TraceID string
 }
 
+type KeywordOperator string
+
+const (
+	KeywordSingle KeywordOperator = "single"
+	KeywordAnd    KeywordOperator = "and"
+	KeywordOr     KeywordOperator = "or"
+)
+
+type KeywordExpression struct {
+	Operator KeywordOperator
+	Terms    []string
+}
+
+func ParseKeyword(keyword string) KeywordExpression {
+	keyword = strings.TrimSpace(keyword)
+	if keyword == "" {
+		return KeywordExpression{}
+	}
+	hasAnd := strings.Contains(keyword, "&&")
+	hasOr := strings.Contains(keyword, "||")
+	if hasAnd && hasOr {
+		return KeywordExpression{Operator: KeywordSingle, Terms: []string{keyword}}
+	}
+	if hasAnd {
+		return keywordExpression(KeywordAnd, strings.Split(keyword, "&&"))
+	}
+	if hasOr {
+		return keywordExpression(KeywordOr, strings.Split(keyword, "||"))
+	}
+	return KeywordExpression{Operator: KeywordSingle, Terms: []string{keyword}}
+}
+
+func keywordExpression(op KeywordOperator, parts []string) KeywordExpression {
+	terms := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			terms = append(terms, part)
+		}
+	}
+	if len(terms) <= 1 {
+		if len(terms) == 0 {
+			return KeywordExpression{}
+		}
+		return KeywordExpression{Operator: KeywordSingle, Terms: terms}
+	}
+	return KeywordExpression{Operator: op, Terms: terms}
+}
+
+func (f QueryFilters) KeywordExpression() KeywordExpression {
+	return ParseKeyword(f.Keyword)
+}
+
 var levelOrder = []string{"debug", "info", "warn", "error"}
 
 // NormalizedLevels returns known levels in input order, lowercased.

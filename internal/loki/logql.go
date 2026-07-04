@@ -2,6 +2,7 @@ package loki
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"log-search/internal/storage"
@@ -23,8 +24,13 @@ func buildLogQL(filters storage.QueryFilters) (string, error) {
 	}
 
 	parts := []string{"{" + strings.Join(matchers, ", ") + "}"}
-	if keyword := strings.TrimSpace(filters.Keyword); keyword != "" {
-		parts = append(parts, `|= "`+escapeLogQLValue(keyword)+`"`)
+	switch keyword := filters.KeywordExpression(); keyword.Operator {
+	case storage.KeywordSingle, storage.KeywordAnd:
+		for _, term := range keyword.Terms {
+			parts = append(parts, `|= "`+escapeLogQLValue(term)+`"`)
+		}
+	case storage.KeywordOr:
+		parts = append(parts, `|~ "`+escapeLogQLValue(keywordRegex(keyword.Terms))+`"`)
 	}
 	if traceID := strings.TrimSpace(filters.TraceID); traceID != "" {
 		parts = append(parts, `| tid="`+escapeLogQLValue(traceID)+`"`)
@@ -35,4 +41,12 @@ func buildLogQL(filters storage.QueryFilters) (string, error) {
 func escapeLogQLValue(v string) string {
 	v = strings.ReplaceAll(v, `\`, `\\`)
 	return strings.ReplaceAll(v, `"`, `\"`)
+}
+
+func keywordRegex(terms []string) string {
+	quoted := make([]string, 0, len(terms))
+	for _, term := range terms {
+		quoted = append(quoted, regexp.QuoteMeta(term))
+	}
+	return strings.Join(quoted, "|")
 }

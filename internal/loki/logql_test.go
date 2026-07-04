@@ -24,6 +24,16 @@ func TestBuildLogQL(t *testing.T) {
 			want: `{env="prod", app="api", level=~"(?i)info|warn|error"} |= "timeout" | tid="t1"`,
 		},
 		{
+			name:    "keyword and",
+			filters: storage.QueryFilters{Env: "prod", Keyword: "timeout && retry"},
+			want:    `{env="prod"} |= "timeout" |= "retry"`,
+		},
+		{
+			name:    "keyword or",
+			filters: storage.QueryFilters{Env: "prod", Keyword: `timeout || retry?`},
+			want:    `{env="prod"} |~ "timeout|retry\\?"`,
+		},
+		{
 			name:    "all levels omitted",
 			filters: storage.QueryFilters{Env: "prod"},
 			want:    `{env="prod"}`,

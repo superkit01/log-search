@@ -27,10 +27,20 @@ func buildESQuery(filters storage.QueryFilters) map[string]interface{} {
 			},
 		})
 	}
-	if keyword := strings.TrimSpace(filters.Keyword); keyword != "" {
+	switch keyword := filters.KeywordExpression(); keyword.Operator {
+	case storage.KeywordSingle, storage.KeywordAnd:
+		for _, term := range keyword.Terms {
+			mustList = append(mustList, matchMessage(term))
+		}
+	case storage.KeywordOr:
+		should := make([]interface{}, 0, len(keyword.Terms))
+		for _, term := range keyword.Terms {
+			should = append(should, matchMessage(term))
+		}
 		mustList = append(mustList, map[string]interface{}{
-			"match_phrase": map[string]interface{}{
-				"message": keyword,
+			"bool": map[string]interface{}{
+				"should":               should,
+				"minimum_should_match": 1,
 			},
 		})
 	}
@@ -40,6 +50,14 @@ func buildESQuery(filters storage.QueryFilters) map[string]interface{} {
 
 	query["bool"].(map[string]interface{})["must"] = mustList
 	return query
+}
+
+func matchMessage(value string) map[string]interface{} {
+	return map[string]interface{}{
+		"match_phrase": map[string]interface{}{
+			"message": value,
+		},
+	}
 }
 
 func term(field, value string) map[string]interface{} {
