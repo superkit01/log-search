@@ -122,20 +122,28 @@ func (c *Config) validate() error {
 	if c.Server.Addr == "" {
 		c.Server.Addr = ":8080"
 	}
-	if len(c.UI.Envs) == 0 {
-		c.UI.Envs = DefaultUICfg().Envs
+	if err := validateUIOptions(&c.UI); err != nil {
+		return err
 	}
-	for i := range c.UI.Envs {
-		c.UI.Envs[i].Label = strings.TrimSpace(c.UI.Envs[i].Label)
-		c.UI.Envs[i].Value = strings.TrimSpace(c.UI.Envs[i].Value)
-		if c.UI.Envs[i].Value == "" {
+	return nil
+}
+
+// validateUIOptions 验证并规范化 UI 配置，trim 空白、应用默认值。
+func validateUIOptions(ui *UICfg) error {
+	if len(ui.Envs) == 0 {
+		ui.Envs = DefaultUICfg().Envs
+	}
+	for i := range ui.Envs {
+		ui.Envs[i].Label = strings.TrimSpace(ui.Envs[i].Label)
+		ui.Envs[i].Value = strings.TrimSpace(ui.Envs[i].Value)
+		if ui.Envs[i].Value == "" {
 			return fmt.Errorf("ui.envs[%d].value is required", i)
 		}
-		if c.UI.Envs[i].Label == "" {
-			c.UI.Envs[i].Label = c.UI.Envs[i].Value
+		if ui.Envs[i].Label == "" {
+			ui.Envs[i].Label = ui.Envs[i].Value
 		}
 	}
-	c.UI.Apps = compactStrings(c.UI.Apps)
+	ui.Apps = compactStrings(ui.Apps)
 	return nil
 }
 

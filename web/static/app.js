@@ -430,12 +430,15 @@ function renderResults(allLines, pageLines, append) {
   });
 }
 
+// toBeijingDateObj 将任意时区的 Date 对象转换为东八区（UTC+8）的 Date 对象。
+function toBeijingDateObj(date) {
+  const utc = date.getTime() + (date.getTimezoneOffset() * 60000);
+  return new Date(utc + (3600000 * 8));
+}
+
 // 转换日期为东八区（UTC+8）- 格式：2026-06-28
 function toBeijingDate(isoString) {
-  const d = new Date(isoString);
-  const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
-  const beijingTime = new Date(utc + (3600000 * 8));
-  return beijingTime.toLocaleDateString('zh-CN', {
+  return toBeijingDateObj(new Date(isoString)).toLocaleDateString('zh-CN', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit'
@@ -444,15 +447,11 @@ function toBeijingDate(isoString) {
 
 // 转换时间为东八区（UTC+8）- 格式：20:05:30.123
 function toBeijingTime(isoString) {
-  const d = new Date(isoString);
-  const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
-  const beijingTime = new Date(utc + (3600000 * 8));
-
-  const hours = String(beijingTime.getHours()).padStart(2, '0');
-  const minutes = String(beijingTime.getMinutes()).padStart(2, '0');
-  const seconds = String(beijingTime.getSeconds()).padStart(2, '0');
-  const milliseconds = String(beijingTime.getMilliseconds()).padStart(3, '0');
-
+  const d = toBeijingDateObj(new Date(isoString));
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const seconds = String(d.getSeconds()).padStart(2, '0');
+  const milliseconds = String(d.getMilliseconds()).padStart(3, '0');
   return `${hours}:${minutes}:${seconds}.${milliseconds}`;
 }
 

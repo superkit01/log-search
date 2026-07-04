@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"sort"
@@ -60,12 +61,15 @@ func (c *httpClient) QueryRange(ctx context.Context, query string, start, end ti
 			if err != nil {
 				continue
 			}
+			// Merge stream labels and structured metadata into a single label map.
+			// If both contain the same key, metadata takes precedence (consistent with
+			// Loki's structured metadata semantics).
 			labels := make(map[string]string, len(s.Stream)+len(v.Metadata))
 			for k, val := range s.Stream {
 				labels[k] = val
 			}
 			for k, val := range v.Metadata {
-				labels[k] = val
+				labels[k] = val // Overwrites stream label if key exists
 			}
 			res.Lines = append(res.Lines, Line{
 				Time:   time.Unix(0, ns).UTC(),
@@ -93,6 +97,7 @@ func (c *httpClient) get(ctx context.Context, path string, params url.Values, ou
 	if enc := params.Encode(); enc != "" {
 		u += "?" + enc
 	}
+	log.Printf("[Loki Request] URL=%s", u)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return err

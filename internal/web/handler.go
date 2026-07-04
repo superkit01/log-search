@@ -31,8 +31,10 @@ func New(lc loki.Client, defaultLimit int, ui ...UIOptions) *Handler {
 	opts := UIOptions(config.DefaultUICfg())
 	if len(ui) > 0 {
 		opts = ui[0]
+		if len(opts.Envs) == 0 {
+			opts.Envs = config.DefaultUICfg().Envs
+		}
 	}
-	opts = normalizeUIOptions(opts)
 	return &Handler{Loki: lc, Limit: defaultLimit, UI: opts}
 }
 
@@ -48,13 +50,6 @@ func (h *Handler) index(c *gin.Context) {
 		"envs": h.UI.Envs,
 		"apps": h.UI.Apps,
 	})
-}
-
-func normalizeUIOptions(opts UIOptions) UIOptions {
-	if len(opts.Envs) == 0 {
-		opts.Envs = config.DefaultUICfg().Envs
-	}
-	return opts
 }
 
 func (h *Handler) queryRange(c *gin.Context) {
@@ -99,6 +94,8 @@ func (h *Handler) queryRange(c *gin.Context) {
 			return
 		}
 	}
+	log.Printf("[Loki Query] query=%q start=%s end=%s limit=%d direction=%s cursor=%s",
+		query, start.Format(time.RFC3339), end.Format(time.RFC3339), limit, direction, req.Cursor)
 	res, err := h.Loki.QueryRange(c.Request.Context(), query, start, end, limit, direction)
 	if err != nil {
 		status, body := lokiStatusAndBody(err)
