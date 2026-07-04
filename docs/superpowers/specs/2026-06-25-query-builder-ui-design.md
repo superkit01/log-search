@@ -3,6 +3,8 @@
 日期:2026-06-25
 状态:已与用户确认,待实现
 
+> 当前实现备注(2026-07):本文记录的是早期 UI 改造设计。当前代码已经演进为浏览器提交 `/api/query_range` POST JSON,由后端构造 LogQL;链路字段使用 Loki structured metadata `tid`,过滤语法为 `| tid="..."`,不是本文中的 `trace_id`。当前契约以 `AGENTS.md` / `README.md` / `2026-06-24-log-search-design.md` 的更新版本为准。
+
 ## 背景
 
 当前 `log-search` 的查询 UI 存在三处需要改造:

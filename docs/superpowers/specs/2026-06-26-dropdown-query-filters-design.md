@@ -4,6 +4,8 @@
 - 状态:设计
 - 范围:**纯前端改动**(`web/templates/index.html`、`web/static/app.js`、`web/static/logql.js`、`web/static/style.css`、`web/logql.test.js`)。后端 Go 代码、响应结构、错误映射契约均不变。
 
+> 当前实现备注(2026-07):本文记录的是阶段性设计。当前代码已经改为配置化 env/apps、多选 level tabs、`/api/query_range` POST JSON,并由后端构造 LogQL;链路字段使用 structured metadata `tid`,过滤语法为 `| tid="..."`。`web/static/logql.js` / `web/logql.test.js` 已不再是当前结构。
+
 ## 1. 背景与动机
 
 当前查询区用通用「标签 + 标签值 + 添加」构建器生成 chip:用户需"选标签 → 选值 → 点添加"三步才能加一个条件,且每加一个标签都要重复一遍。对高频的"按环境 / 级别 / 应用过滤"场景不够便捷。
