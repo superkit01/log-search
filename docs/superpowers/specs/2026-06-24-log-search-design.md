@@ -32,13 +32,13 @@
 - 配置:`gopkg.in/yaml.v3`
 - 日志:标准库 `log/slog`
 - HTTP 客户端:标准库 `net/http`(直连 Loki HTTP API)
-- 前端:Gin HTML 模板 + 原生 JS + CSS;直方图用 CDN 引入 Chart.js(无构建步骤、无本地 vendor)
+- 前端:Gin HTML 模板 + 原生 JS + CSS;直方图用 vendored Chart.js(`web/static/chart.umd.min.js`,无构建步骤)
 
 ## 4. 关键架构决策
 
 **方案 A:Go 直连 Loki HTTP API(已选定)**
 
-后端用 `net/http` 直接请求 Loki 的 HTTP 接口(`/loki/api/v1/query_range`、`/loki/api/v1/labels`、`/loki/api/v1/label/{name}/values`)。
+后端用 `net/http` 直接请求 Loki 的 HTTP 接口(`/loki/api/v1/query_range`)。
 
 - Loki HTTP API 稳定、文档清晰,本就是为查询消费方设计
 - 依赖极少,编译快、体积小
@@ -67,8 +67,8 @@ log-search/
 │       ├── handler.go            # 路由 + handler
 │       └── handler_test.go       # 注入 mock loki.Client 测试
 ├── web/
-│   ├── templates/{layout,index}.html
-│   └── static/{app.js,style.css}
+│   ├── templates/index.html
+│   └── static/{app.js,style.css,chart.umd.min.js,...}
 ├── config.example.yaml
 ├── go.mod / go.sum / Makefile / README.md
 └── docs/superpowers/specs/       # 本文档
@@ -88,29 +88,32 @@ log-search/
 
 | 方法 路径 | 说明 |
 |---|---|
-| `GET /api/labels` | 标签列表(透传 Loki `/labels`,带 start/end) |
-| `GET /api/label/:name/values` | 指定标签的值列表 |
-| `GET /api/query_range` | 主查询 |
+| `POST /api/query_range` | 主查询。浏览器提交 JSON 筛选条件,后端生成 LogQL |
 
 ## 7. `/api/query_range` 契约
 
-**请求参数(query string)**
-- `query`:LogQL 字符串(必填)
+**请求体(JSON)**
+- `env`:环境标签值,可空
+- `app`:应用标签值,可空
+- `levels`:级别数组;全选时前端传空数组,表示不加 level 过滤
+- `keyword`:日志文本关键词,可空
+- `traceId`:链路 id 输入值,后端按 Loki structured metadata 字段 `tid` 生成 `| tid="..."`
 - `start` / `end`:unix 秒
-- `limit`:返回条数,默认 1000,上限 5000
-- `direction`:`FORWARD` / `BACKWARD`,默认 `BACKWARD`
+- `direction`:`FORWARD` / `BACKWARD`,默认按 `BACKWARD` 处理
+- `cursor`:可选,unix 纳秒字符串,用于自动分页
 
 **处理**
-1. 校验参数(query 非空、start<end、limit 在上限内)
-2. 调 Loki `query_range`(start/end 转**纳秒**,direction 透传)
-3. 把 Loki 返回的 `streams` 拍平为日志行,对每行做级别检测
-4. 返回 JSON
+1. 校验 JSON、筛选条件、时间范围和分页 cursor;请求体限制为 16KB。
+2. 后端从 `env/app/levels/keyword/traceId` 构造 LogQL;`tid` 使用管道过滤表达式,不放进 stream selector。
+3. 调 Loki `query_range`(start/end 转**纳秒**,direction 透传,limit 取配置 `loki.default_limit`)。
+4. 把 Loki 返回的 `streams` 拍平为日志行,对每行做级别检测。
+5. 只保留 allowlist tags:`env`、`app`、`level`、`tid`;返回 JSON。
 
 **响应**
 ```json
 {
   "lines": [
-    {"ts":"2026-06-24T12:00:00.123Z","level":"error","line":"...","labels":{"app":"nginx"}}
+    {"ts":"2026-06-24T12:00:00.123Z","level":"error","line":"...","labels":{"env":"test","app":"service-x","level":"error","tid":"tid-0001"}}
   ],
   "total": 142
 }
@@ -118,15 +121,17 @@ log-search/
 
 ## 8. 查询区 UI 布局(消除歧义)
 
-「LogQL 查询」档的查询区由以下控件组成,主输入是 **LogQL 输入框**:
+当前查询区由固定筛选控件组成,浏览器不再暴露原生 LogQL 输入框:
 
-- **标签选择器(label)**:下拉选 label;选中后联动出该 label 的值,点击值即把 `key="value"` 拼进 LogQL 输入框的 `{...}` 匹配器,辅助构建 selector
-- **关键词输入框**:辅助项,填入后自动在 LogQL 末尾追加 `|= "keyword"`(即关键词是 LogQL 的一部分,不是独立过滤通道)
-- **原生 LogQL 输入框**:可手写完整查询,是最终提交给后端的内容(标签 / 关键词的辅助操作都是修改这个框的内容)
-- **时间范围**:快捷按钮(最近 15m / 1h / 6h / 24h)+ 自定义起止;`end` 默认 now
-- **方向 / 条数**:direction 下拉(FORWARD/BACKWARD)、limit 输入
+- **环境 tabs**:来自配置 `ui.envs`,默认取第一个配置项;未配置时回退到“演示”/`demo`。
+- **级别 tabs**:DEBUG/INFO/WARN/ERROR 多选;全选表示不加 level 过滤。
+- **方向 tabs**:`BACKWARD` / `FORWARD`,默认 `BACKWARD`。
+- **应用下拉**:来自配置 `ui.apps`,可空表示不限。
+- **链路 id 输入框**:用户输入后作为 structured metadata `tid` 过滤。
+- **关键词输入框**:非空时在 LogQL 末尾追加 `|= "keyword"`。
+- **时间范围**:`1h`、`3h`、`今天` 快捷按钮 + 自定义起止;输入框不允许保持为空。
 
-即:前端最终提交的 `query` 就是 LogQL 框的内容;标签选择器和关键词框只是帮你拼 LogQL 的辅助控件。
+前端提交 JSON 筛选条件;最终 LogQL 由后端生成。
 
 ## 9. 直方图统计(关键折中)
 
@@ -145,6 +150,12 @@ loki:
   url: "http://localhost:3100"   # 用户的 Loki 地址
   timeout: 30s                   # HTTP 客户端超时
   default_limit: 1000            # 查询默认条数
+ui:
+  envs:
+    - label: 演示
+      value: demo
+  apps:
+    - service-x
 ```
 
 - 配置路径:flag `--config`(默认 `config.yaml`)
@@ -155,7 +166,8 @@ loki:
 
 - **Loki 不可达 / 超时**:handler 返回 `502`,`{"error":"无法连接 Loki: ..."}`
 - **LogQL 语法错**(Loki 返回 400):原样透传 Loki 错误信息,`{"error":"Loki: <msg>"}`
-- **参数非法**(start>end、limit 越界、缺 query):返回 `400`,`{"error":"..."}`
+- **参数非法**(JSON 非法、筛选条件为空、start/end 非法、cursor 非法):返回 `400`,`{"error":"..."}`
+- **请求体过大**:`POST /api/query_range` 超过 16KB 返回 `413`。
 - **配置缺失 / 无效**:启动即失败,不进入半启动状态
 - 前端:所有 fetch 失败统一在结果区顶部显示错误条,不破坏已加载数据
 
@@ -176,9 +188,11 @@ loki:
 
 ## 13. 测试策略
 
-- `loki/client_test.go`:`httptest` 起假 Loki,返回固定 `streams` JSON,断言 QueryRange / Labels / LabelValues 解析正确;并测超时、非 200 错误透传
+- `loki/client_test.go`:`httptest` 起假 Loki,返回固定 `streams` JSON,断言 QueryRange 解析正确;并测超时、非 200 错误透传
 - `logparse/level_test.go`:表驱动,覆盖 JSON / kv / 文本三格式各档级别 + 无匹配
 - `web/handler_test.go`:注入 mock `loki.Client` 接口,测 `/api/query_range` 参数校验与 502/400 透传;不依赖真实 Loki
+- `web/*.test.js`:用 Node 内置 `node:test` 覆盖分享链接、分页、时间范围、trace drilldown 等纯逻辑。
+- `scripts/seed_loki_test.py`:覆盖 Loki push 测试数据 payload,确保 `tid` 写入 structured metadata 而非 stream label。
 - Mock 通过 `loki.Client` 接口注入;真实网络只发生在 `httpClient` 一个结构体内
 
 ## 14. 依赖与运行
