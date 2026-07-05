@@ -14,4 +14,4 @@ seed-loki:
 	@./scripts/seed_loki.py
 seed-es:
 	@echo "生成 ES 测试数据..."
-	@ES_URL=${ES_URL:-http://localhost:9200} ./scripts/seed_es.py
+	@ES_URL=$${ES_URL:-http://localhost:9200} ./scripts/seed_es.py --url $${ES_URL:-http://localhost:9200}

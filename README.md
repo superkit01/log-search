@@ -60,12 +60,12 @@ ES 每条日志文档需要使用顶层字段承载同一组信息:
 
 - `@timestamp`: 必填,字符串或 date 字段,需要能按 RFC3339/RFC3339Nano 表达时间,例如 `2026-07-04T21:27:00+08:00` 或 `2026-07-04T13:27:00Z`
 - `message`: 必填,日志正文,页面展示为 log line
-- `env`: 必填,等价 Loki label `env`
-- `app`: 必填,等价 Loki label `app`
-- `level`: 必填,建议小写 `debug`、`info`、`warn`、`error`
-- `tid`: 可选,等价 Loki structured metadata `tid`;只有存在该字段的文档才能按链路 id 查询
+- `env`: 必填,等价 Loki label `env`,**必须为 `keyword` 类型**
+- `app`: 必填,等价 Loki label `app`,**必须为 `keyword` 类型**
+- `level`: 必填,建议小写 `debug`、`info`、`warn`、`error`,**必须为 `keyword` 类型**
+- `tid`: 可选,等价 Loki structured metadata `tid`,**必须为 `keyword` 类型**;只有存在该字段的文档才能按链路 id 查询
 
-当前 ES 查询实现会使用 `env.keyword`、`app.keyword`、`tid.keyword` 做精确匹配,使用 `level.keyword` 做级别集合匹配,并使用 `message` 的 `match_phrase` 做日志内容关键字匹配。因此标签字段应是 `keyword` 类型,或保留 ES 默认动态映射生成的 `.keyword` 子字段。推荐 mapping:
+**重要**: `env`、`app`、`level`、`tid` 字段**必须**是 `keyword` 类型,不能是 `text` 类型。查询实现会使用这些字段的 `.keyword` 子字段进行精确匹配。推荐 mapping:
 
 ```json
 {
@@ -81,6 +81,10 @@ ES 每条日志文档需要使用顶层字段承载同一组信息:
   }
 }
 ```
+
+**索引命名规范**: 支持按环境分离索引,配置中使用 `logs-{env}-*` 模式会自动将不同环境的日志路由到对应索引:
+- `env=test` → 查询 `logs-test-*` (包含 `logs-test-2026.07.04`、`logs-test-2026.07.05` 等所有历史索引)
+- `env=prod` → 查询 `logs-prod-*`
 
 页面配置里的 `ui.envs` / `ui.apps` 必须和 Loki labels 或 ES 文档中的实际 `env` / `app` 值一致;否则选择对应筛选项时会正常返回空结果。
 
@@ -102,12 +106,18 @@ python3 scripts/seed_loki.py --count 2 --dry-run
 
 ```bash
 make seed-es
-ES_URL=http://localhost:9200 make seed-es
-./scripts/seed_es.py --url http://localhost:9200 --index logs-{date}
-./scripts/seed_es.py --count 2 --dry-run
+ES_URL=http://106.14.107.122:8900 make seed-es
+./scripts/seed_es.py --url http://106.14.107.122:8900 --env prod --count 500
+./scripts/seed_es.py --url http://106.14.107.122:8900 --env test --index logs-test-{date} --dry-run
 ```
 
-ES 脚本默认写入 `env=test`、`app=api-server/worker/gateway/auth-service`、`level=debug/info/warn/error`,并在约 10% 的日志中写入 `tid` 字段。页面的 `ui.apps` 需要和 ES 文档里的 `app` 值一致,否则选择应用后会查不到数据。更多说明见 `docs/generate-es-data.md`。
+ES 脚本默认写入 `env=test`、`app=api-server/worker/gateway/auth-service`、`level=debug/info/warn/error`,并在约 10% 的日志中写入 `tid` 字段。默认索引模式为 `logs-{env}-{date}`,会生成如 `logs-test-2026.07.05` 的索引。
+
+**环境隔离**: 使用 `--env` 参数可为不同环境生成数据:
+- `--env test` → 生成到 `logs-test-*` 索引
+- `--env prod` → 生成到 `logs-prod-*` 索引
+
+页面的 `ui.apps` 需要和 ES 文档里的 `app` 值一致,否则选择应用后会查不到数据。更多说明见 `docs/generate-es-data.md`。
 
 ## 开发
 

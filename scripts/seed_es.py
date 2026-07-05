@@ -44,8 +44,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--index",
-        default="logs-{date}",
-        help="Index pattern, use {date} for today's date in YYYY.MM.DD format (default: %(default)s)",
+        default="logs-{env}-{date}",
+        help="Index pattern, supports {env} and {date} placeholders (default: %(default)s)",
     )
     parser.add_argument(
         "--env",
@@ -111,7 +111,7 @@ def build_bulk_payload(
             "env": env,
             "app": app,
             "level": level,
-            "host": f"host-{i % 10}",
+            "hostname": f"host-{i % 10}",  # 使用 hostname 而非 host，避免与 ECS 标准冲突
             "method": rng.choice(("GET", "POST", "PUT")),
             "path": rng.choice(("/api/orders", "/api/users", "/api/payments", "/api/search")),
             "status": status_for_level(level, rng),
@@ -131,8 +131,8 @@ def build_bulk_payload(
             doc["message"] = f"[TEST] {doc['message']} with keyword timeout"
 
         # 构建 bulk API 格式
-        # 第一行：index 操作
-        index_op = {"index": {"_index": index}}
+        # 第一行：create 操作（ES data streams 要求）
+        index_op = {"create": {"_index": index}}
         bulk_lines.append(json.dumps(index_op, ensure_ascii=False))
 
         # 第二行：文档数据
@@ -191,9 +191,9 @@ def check_es_health(es_url: str) -> None:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
 
-    # 替换索引名中的日期占位符
+    # 替换索引名中的占位符
     today = datetime.now().strftime("%Y.%m.%d")
-    index = args.index.replace("{date}", today)
+    index = args.index.replace("{env}", args.env).replace("{date}", today)
 
     # 计算时间范围：从今天 00:00:00 开始，到现在
     now = datetime.now()
@@ -238,10 +238,29 @@ def main(argv: list[str] | None = None) -> int:
                     errors.append(err)
             if errors:
                 print(f"✗ Some entries failed to index: {errors[0]}", file=sys.stderr)
+                print(f"Full response: {body[:500]}", file=sys.stderr)
                 return 1
 
         suffix = f": {body}" if body and len(body) < 200 else ""
         print(f"✓ Pushed {args.count} log entries (HTTP {status}){suffix}")
+        # 显示实际创建的文档数
+        if body and len(body) > 0:
+            result = json.loads(body)
+            if result.get("errors"):
+                print(f"⚠ Warning: Some entries had errors", file=sys.stderr)
+                # 打印前几个错误
+                errors = []
+                for item in result.get("items", []):
+                    if err := item.get("create", {}).get("error"):
+                        errors.append(err)
+                        if len(errors) >= 3:
+                            break
+                if errors:
+                    print(f"  Errors: {errors[:3]}", file=sys.stderr)
+            else:
+                # 显示实际创建的文档数
+                created = sum(1 for item in result.get("items", []) if item.get("create", {}).get("result") == "created")
+                print(f"  Created {created} documents")
         return 0
     except RuntimeError as err:
         print(f"✗ {err}", file=sys.stderr)

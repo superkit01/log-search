@@ -58,7 +58,7 @@ func (c *httpClient) QueryRange(ctx context.Context, filters storage.QueryFilter
 	}
 
 	var result searchResult
-	err := c.search(ctx, buildTimeRangeIndex(c.index, start, end), searchBody, &result)
+	err := c.search(ctx, buildTimeRangeIndex(c.index, filters.Env, start, end), searchBody, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -168,9 +168,14 @@ func (c *httpClient) convertResult(result searchResult) (*storage.QueryResult, e
 	return res, nil
 }
 
-// buildTimeRangeIndex 根据时间范围构建索引名
-// 支持 "logs-{yyyy.MM.dd}" 格式，会根据 start/end 时间生成索引列表
-func buildTimeRangeIndex(indexPattern string, start, end time.Time) string {
+// buildTimeRangeIndex 根据时间范围和 env 构建索引名
+// 支持 "logs-{env}-{yyyy.MM.dd}" 格式，会根据 env 和 start/end 时间生成索引列表
+func buildTimeRangeIndex(indexPattern string, env string, start, end time.Time) string {
+	// 替换 {env} 占位符
+	if env != "" && strings.Contains(indexPattern, "{env}") {
+		indexPattern = strings.ReplaceAll(indexPattern, "{env}", env)
+	}
+
 	if !strings.Contains(indexPattern, "{") {
 		return indexPattern
 	}
