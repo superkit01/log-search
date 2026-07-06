@@ -356,7 +356,9 @@ function renderResults(allLines, pageLines, append) {
   meta.textContent = "已加载 " + allLines.length + " 行";
   pageLines.forEach((l) => {
     const row = document.createElement("div");
-    row.className = "line lvl-" + (l.level || "info");
+    // 兜底归一化为小写:CSS 的 lvl-info/warn/error/debug 只匹配小写,
+    // 而上游 Loki/ES 的 level 标签可能是大写(如 "INFO"),不归一化会丢颜色。
+    row.className = "line lvl-" + (l.level || "info").toLowerCase();
 
     // 时间戳（东八区）分成两行显示
     const ts = document.createElement("span");
