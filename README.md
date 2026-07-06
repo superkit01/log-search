@@ -60,23 +60,23 @@ ES 每条日志文档需要使用顶层字段承载同一组信息:
 
 - `@timestamp`: 必填,字符串或 date 字段,需要能按 RFC3339/RFC3339Nano 表达时间,例如 `2026-07-04T21:27:00+08:00` 或 `2026-07-04T13:27:00Z`
 - `message`: 必填,日志正文,页面展示为 log line
-- `env`: 必填,等价 Loki label `env`,**必须为 `keyword` 类型**
-- `app`: 必填,等价 Loki label `app`,**必须为 `keyword` 类型**
-- `level`: 必填,建议小写 `debug`、`info`、`warn`、`error`,**必须为 `keyword` 类型**
-- `tid`: 可选,等价 Loki structured metadata `tid`,**必须为 `keyword` 类型**;只有存在该字段的文档才能按链路 id 查询
+- `env`: 必填,等价 Loki label `env`,需要带 `.keyword` 子字段(精确匹配用)
+- `app`: 必填,等价 Loki label `app`,需要带 `.keyword` 子字段(精确匹配用)
+- `level`: 必填,建议小写 `debug`、`info`、`warn`、`error`,需要带 `.keyword` 子字段
+- `tid`: 可选,等价 Loki structured metadata `tid`,需要带 `.keyword` 子字段;只有存在该字段的文档才能按链路 id 查询
 
-**重要**: `env`、`app`、`level`、`tid` 字段**必须**是 `keyword` 类型,不能是 `text` 类型。查询实现会使用这些字段的 `.keyword` 子字段进行精确匹配。推荐 mapping:
+**重要**: 查询实现对 `env`、`app`、`level`、`tid` 使用 `.keyword` 子字段做精确匹配(例如 `env.keyword`、`level.keyword`)。ES 对**动态映射的字符串默认就会生成** `.keyword` 子字段,因此不显式设置 mapping 时开箱即用(`scripts/seed_es.py` 依赖的就是这个默认行为)。若要显式指定 mapping,这几个字段必须配置成 multi-field(同时提供 `text` 主字段与 `keyword` 子字段),**不能**写成纯 `keyword` 类型——纯 `keyword` 字段没有 `.keyword` 子字段,会让这些过滤条件命中不到任何数据。推荐 mapping:
 
 ```json
 {
   "mappings": {
     "properties": {
       "@timestamp": { "type": "date" },
-      "message": { "type": "text" },
-      "env": { "type": "keyword" },
-      "app": { "type": "keyword" },
-      "level": { "type": "keyword" },
-      "tid": { "type": "keyword" }
+      "message":    { "type": "text" },
+      "env":   { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
+      "app":   { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
+      "level": { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } },
+      "tid":   { "type": "text", "fields": { "keyword": { "type": "keyword", "ignore_above": 256 } } }
     }
   }
 }
