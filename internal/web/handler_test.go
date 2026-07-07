@@ -89,6 +89,41 @@ func TestQueryRange_OK_FillsLevel(t *testing.T) {
 	}
 }
 
+// TestQueryRange_NormalizesUppercaseLevels verifies that uppercase level values
+// from Loki/ES are normalized to lowercase for consistent frontend handling.
+// This fixes the chart bug where all levels showed as "info" because
+// CHART_LEVELS only contains lowercase values.
+func TestQueryRange_NormalizesUppercaseLevels(t *testing.T) {
+	m := &mockStorage{result: &storage.QueryResult{
+		Lines: []storage.Line{
+			{Raw: "error occurred", Labels: map[string]string{"level": "ERROR"}},
+			{Raw: "warning issued", Labels: map[string]string{"level": "WARN"}},
+			{Raw: "info message", Labels: map[string]string{"level": "INFO"}},
+			{Raw: "debug trace", Labels: map[string]string{"level": "DEBUG"}},
+		},
+		Total: 4,
+	}}
+	r := setupRouter(m)
+	req := postQueryRange(`{"env":"test","start":1,"end":99999}`)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", w.Code, w.Body.String())
+	}
+	var res storage.QueryResult
+	if err := json.Unmarshal(w.Body.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	// Verify all uppercase levels are normalized to lowercase
+	wantLevels := []string{"error", "warn", "info", "debug"}
+	for i, line := range res.Lines {
+		if line.Level != wantLevels[i] {
+			t.Errorf("line[%d].Level = %q, want %q", i, line.Level, wantLevels[i])
+		}
+	}
+}
+
 func TestQueryRange_NormalizesTags(t *testing.T) {
 	m := &mockStorage{result: &storage.QueryResult{
 		Lines: []storage.Line{{

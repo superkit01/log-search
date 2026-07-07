@@ -104,8 +104,11 @@ func (h *Handler) queryRange(c *gin.Context) {
 	}
 	for i := range res.Lines {
 		// 从 labels 中提取 level 到 Level 字段（前端使用 l.level 而非 l.labels["level"]）
+		// 规范化为小写，以兼容 Loki/ES 返回的大写 level 值（ERROR, WARN, INFO, DEBUG）
 		if lvl, ok := res.Lines[i].Labels["level"]; ok {
-			res.Lines[i].Level = lvl
+			res.Lines[i].Level = strings.ToLower(lvl)
+			// 同时更新 labels 中的 level 值以保持一致性
+			res.Lines[i].Labels["level"] = res.Lines[i].Level
 		}
 		res.Lines[i].Labels = normalizeLineTags(res.Lines[i].Labels)
 	}

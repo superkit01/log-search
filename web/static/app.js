@@ -536,7 +536,10 @@ function renderChart(lines) {
     const d = new Date(l.ts);
     d.setSeconds(0, 0);
     const key = d.getTime();
-    const lvl = CHART_LEVELS.includes(l.level) ? l.level : "info";
+    // 大小写不敏感匹配：将 level 转为小写后再比较
+    // 兼容后端可能返回的各种大小写格式（ERROR/error, Error 等）
+    const normalizedLevel = l.level ? l.level.toLowerCase() : "info";
+    const lvl = CHART_LEVELS.includes(normalizedLevel) ? normalizedLevel : "info";
     buckets[key] = buckets[key] || emptyLevelBucket();
     buckets[key][lvl]++;
   });
