@@ -137,6 +137,25 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o ./b
 CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o ./bin/log-search ./cmd/server
 ```
 
+**Windows 交叉编译** (Git Bash / PowerShell):
+
+```bash
+# Git Bash / WSL
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o bin/log-search ./cmd/server
+
+# Windows CMD
+set CGO_ENABLED=0
+set GOOS=linux
+set GOARCH=amd64
+go build -trimpath -ldflags="-s -w" -o bin/log-search ./cmd/server
+
+# Windows PowerShell
+$env:CGO_ENABLED="0"
+$env:GOOS="linux"
+$env:GOARCH="amd64"
+go build -ldflags="-s -w" -o bin/log-search ./cmd/server
+```
+
 服务器架构用 `uname -m` 确认:`x86_64` → `amd64`;`aarch64` → `arm64`。
 
 仓库自带的 `Dockerfile`(多阶段构建)也可直接用于部署,无需手动指定目标架构。
