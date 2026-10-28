@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+	"log-search/internal/elasticsearch"
 )
 
 type Config struct {
@@ -20,8 +21,8 @@ type Config struct {
 // StorageCfg 存储后端配置
 type StorageCfg struct {
 	Type string  `yaml:"type"` // loki, es
-	Loki  LokiCfg `yaml:"loki"`
-	ES    ESCfg   `yaml:"elasticsearch"`
+	Loki LokiCfg `yaml:"loki"`
+	ES   ESCfg   `yaml:"elasticsearch"`
 }
 
 type LokiCfg struct {
@@ -32,10 +33,12 @@ type LokiCfg struct {
 
 // ESCfg Elasticsearch 配置
 type ESCfg struct {
-	URL          string `yaml:"url"`
-	Timeout      string `yaml:"timeout"`
-	DefaultLimit int    `yaml:"default_limit"`
-	Index        string `yaml:"index"` // 索引名称模式，支持时间戳如 "logs-{yyyy.MM.dd}"
+	Fields        elasticsearch.FieldMapping `yaml:"fields"`
+	IndexTimezone string                     `yaml:"index_timezone"`
+	URL           string                     `yaml:"url"`
+	Timeout       string                     `yaml:"timeout"`
+	DefaultLimit  int                        `yaml:"default_limit"`
+	Index         string                     `yaml:"index"` // 索引名称模式，支持时间戳如 "logs-{yyyy.MM.dd}"
 }
 
 type ServerCfg struct {
@@ -48,13 +51,16 @@ const (
 )
 
 type UICfg struct {
-	Envs []UIOption `yaml:"envs"`
-	Apps []string   `yaml:"apps"`
+	Namespaces []UIOption `yaml:"namespaces"`
+	Envs       []UIOption `yaml:"envs"`
+	Apps       []string   `yaml:"apps"`
 }
 
 type UIOption struct {
-	Label string `yaml:"label"`
-	Value string `yaml:"value"`
+	Apps        []string `yaml:"apps"`
+	Description string   `yaml:"description"`
+	Label       string   `yaml:"label"`
+	Value       string   `yaml:"value"`
 }
 
 func DefaultUICfg() UICfg {
@@ -186,6 +192,12 @@ func (c *Config) validateES() error {
 	if c.Storage.ES.Index == "" {
 		return fmt.Errorf("storage.elasticsearch.index is required when type=es")
 	}
+	if c.Storage.ES.IndexTimezone == "" {
+		c.Storage.ES.IndexTimezone = "UTC"
+	}
+	if _, err := time.LoadLocation(c.Storage.ES.IndexTimezone); err != nil {
+		return fmt.Errorf("storage.elasticsearch.index_timezone: %w", err)
+	}
 	return c.validateCommon()
 }
 
@@ -198,6 +210,25 @@ func (c *Config) validateCommon() error {
 
 // validateUIOptions 验证并规范化 UI 配置，trim 空白、应用默认值。
 func validateUIOptions(ui *UICfg) error {
+	seen := map[string]bool{}
+	for i := range ui.Namespaces {
+		option := &ui.Namespaces[i]
+		option.Value = strings.TrimSpace(option.Value)
+		option.Label = strings.TrimSpace(option.Label)
+		option.Description = strings.TrimSpace(option.Description)
+		option.Apps = compactStrings(option.Apps)
+		if !regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`).MatchString(option.Value) {
+			return fmt.Errorf("ui.namespaces[%d].value must be a literal namespace", i)
+		}
+		if seen[option.Value] {
+			return fmt.Errorf("duplicate ui.namespaces value %q", option.Value)
+		}
+		seen[option.Value] = true
+		if option.Label == "" {
+			option.Label = option.Value
+		}
+	}
+
 	if len(ui.Envs) == 0 {
 		ui.Envs = DefaultUICfg().Envs
 	}

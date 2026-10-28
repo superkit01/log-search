@@ -4,15 +4,16 @@ const { traceDrilldownState } = require("./static/trace.js");
 
 test("traceDrilldownState: builds a 15 minute window around the log line", () => {
   const got = traceDrilldownState(
-    { env: "test", app: "", direction: "BACKWARD" },
+    { env: "test", app: "", direction: "BACKWARD", spanId: "span", parentSpanId: "parent", taskId: "task" },
     {
       ts: "2026-07-02T09:13:16.000Z",
-      labels: { app: "boeet-alarm" },
+      labels: { app: "alert-service" },
     },
     "TID:abc"
   );
 
   assert.deepStrictEqual(got, {
+    namespace: "",
     env: "test",
     app: "",
     levels: [],
@@ -27,4 +28,8 @@ test("traceDrilldownState: builds a 15 minute window around the log line", () =>
 test("traceDrilldownState: returns null when timestamp or trace id is missing", () => {
   assert.strictEqual(traceDrilldownState({}, { ts: "bad", labels: {} }, "TID:abc"), null);
   assert.strictEqual(traceDrilldownState({}, { ts: "2026-07-02T09:13:16.000Z", labels: {} }, ""), null);
+});
+
+test("trace drilldown retains namespace", () => {
+ assert.strictEqual(traceDrilldownState({namespace:"ems"}, {ts:"2026-10-28T06:00:00Z"}, "trace").namespace, "ems");
 });

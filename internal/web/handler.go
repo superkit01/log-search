@@ -46,8 +46,9 @@ func (h *Handler) Register(r *gin.Engine) {
 
 func (h *Handler) index(c *gin.Context) {
 	c.HTML(http.StatusOK, "index.html", gin.H{
-		"envs": h.UI.Envs,
-		"apps": h.UI.Apps,
+		"envs":       h.UI.Envs,
+		"namespaces": h.UI.Namespaces,
+		"apps":       h.UI.Apps,
 	})
 }
 
@@ -64,6 +65,26 @@ func (h *Handler) queryRange(c *gin.Context) {
 		return
 	}
 	filters := req.filters()
+	if len(h.UI.Namespaces) > 0 {
+		if filters.Namespace == "" {
+			filters.Namespace = h.UI.Namespaces[0].Value
+		}
+		allowed := false
+		for _, option := range h.UI.Namespaces {
+			if option.Value == filters.Namespace {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "namespace is not configured"})
+			return
+		}
+	} else if filters.Namespace != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "namespace is not configured"})
+		return
+	}
+
 	if !filters.HasSelector() {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one of env, app, or levels is required"})
 		return
@@ -122,7 +143,7 @@ const maxQueryRangeBodyBytes int64 = 16 * 1024
 
 // logTagKeys is the single allowlist for tags returned to the browser. Add new
 // keys here when the UI should display another stable Loki label.
-var logTagKeys = []string{"env", "app", "level", "tid"}
+var logTagKeys = []string{"env", "app", "level", "tid", "traceId", "namespace", "spanId", "parentSpanId", "taskId", "logger_name", "thread_name", "host"}
 
 func normalizeLineTags(labels map[string]string) map[string]string {
 	out := make(map[string]string, len(logTagKeys))

@@ -9,9 +9,24 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	_ "time/tzdata"
 
 	"log-search/internal/storage"
 )
+
+// FieldMapping selects exact-match fields without changing existing indices.
+type FieldMapping struct {
+	Env             string `yaml:"env"`
+	App             string `yaml:"app"`
+	Level           string `yaml:"level"`
+	TraceID         string `yaml:"trace_id"`
+	UppercaseLevels bool   `yaml:"uppercase_levels"`
+}
+
+type Options struct {
+	Fields        FieldMapping
+	IndexTimezone string
+}
 
 type Client interface {
 	QueryRange(ctx context.Context, filters storage.QueryFilters, start, end time.Time, limit int, direction storage.Direction) (*storage.QueryResult, error)
@@ -20,20 +35,44 @@ type Client interface {
 type httpClient struct {
 	baseURL    string
 	index      string
+	fields     FieldMapping
+	location   *time.Location
 	httpClient *http.Client
 }
 
 // NewHTTPClient 创建直连 ES HTTP API 的客户端。
-func NewHTTPClient(rawURL string, index string, timeout time.Duration) Client {
+func NewHTTPClient(rawURL string, index string, timeout time.Duration, options ...Options) Client {
+	opts := Options{}
+	if len(options) > 0 {
+		opts = options[0]
+	}
+	if opts.Fields.Env == "" {
+		opts.Fields.Env = "env.keyword"
+	}
+	if opts.Fields.App == "" {
+		opts.Fields.App = "app.keyword"
+	}
+	if opts.Fields.Level == "" {
+		opts.Fields.Level = "level.keyword"
+	}
+	if opts.Fields.TraceID == "" {
+		opts.Fields.TraceID = "tid.keyword"
+	}
+	location, _ := time.LoadLocation(opts.IndexTimezone)
+	if location == nil {
+		location = time.UTC
+	}
 	return &httpClient{
 		baseURL:    strings.TrimRight(rawURL, "/"),
 		index:      index,
+		fields:     opts.Fields,
+		location:   location,
 		httpClient: &http.Client{Timeout: timeout},
 	}
 }
 
 func (c *httpClient) QueryRange(ctx context.Context, filters storage.QueryFilters, start, end time.Time, limit int, direction storage.Direction) (*storage.QueryResult, error) {
-	esQuery := buildESQuery(filters)
+	esQuery := buildESQueryWithFields(filters, c.fields)
 	boolQuery := esQuery["bool"].(map[string]interface{})
 	mustList := boolQuery["must"].([]interface{})
 
@@ -58,7 +97,7 @@ func (c *httpClient) QueryRange(ctx context.Context, filters storage.QueryFilter
 	}
 
 	var result searchResult
-	err := c.search(ctx, buildTimeRangeIndex(c.index, filters.Env, start, end), searchBody, &result)
+	err := c.search(ctx, buildTimeRangeIndex(strings.ReplaceAll(c.index, "{namespace}", filters.Namespace), filters.Env, start.In(c.location), end.In(c.location)), searchBody, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +119,7 @@ func (c *httpClient) search(ctx context.Context, index string, body map[string]i
 		return err
 	}
 
-	searchURL := fmt.Sprintf("%s/%s/_search", c.baseURL, index)
+	searchURL := fmt.Sprintf("%s/%s/_search?ignore_unavailable=true&allow_no_indices=true", c.baseURL, index)
 	log.Printf("[ES Request] URL=%s body=%s", searchURL, string(data))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, searchURL, strings.NewReader(string(data)))
@@ -121,13 +160,14 @@ func (c *httpClient) search(ctx context.Context, index string, body map[string]i
 }
 
 func (c *httpClient) convertResult(result searchResult) (*storage.QueryResult, error) {
-	res := &storage.QueryResult{}
+	res := &storage.QueryResult{Lines: []storage.Line{}}
 
 	for _, hit := range result.Hits.Hits {
 		source := hit.Source
 
 		// 提取时间戳
-		ts, err := time.Parse(time.RFC3339Nano, source["@timestamp"].(string))
+		timestamp, _ := source["@timestamp"].(string)
+		ts, err := time.Parse(time.RFC3339Nano, timestamp)
 		if err != nil {
 			continue
 		}
@@ -149,7 +189,18 @@ func (c *httpClient) convertResult(result searchResult) (*storage.QueryResult, e
 			}
 		}
 
+		if trace, ok := source["traceId"].(string); ok && trace != "" {
+			labels["tid"] = trace
+		}
+		if labels["app"] == "" {
+			labels["app"], _ = source["serviceName"].(string)
+		}
+		if stack, ok := source["stack_trace"].(string); ok && stack != "" {
+			message += "\n" + stack
+		}
 		res.Lines = append(res.Lines, storage.Line{
+			Index:  hit.Index,
+			ID:     hit.ID,
 			Time:   ts.UTC(),
 			Raw:    message,
 			Labels: labels,
@@ -169,7 +220,7 @@ func (c *httpClient) convertResult(result searchResult) (*storage.QueryResult, e
 }
 
 // buildTimeRangeIndex 根据时间范围和 env 构建索引名
-// 支持 "logs-{env}-{yyyy.MM.dd}" 格式，会根据 env 和 start/end 时间生成索引列表
+// 支持环境和日期占位符，枚举包含 start/end 的全部日历日期。
 func buildTimeRangeIndex(indexPattern string, env string, start, end time.Time) string {
 	// 替换 {env} 占位符
 	if env != "" && strings.Contains(indexPattern, "{env}") {
@@ -180,18 +231,23 @@ func buildTimeRangeIndex(indexPattern string, env string, start, end time.Time) 
 		return indexPattern
 	}
 
-	// 如果时间跨度小于一天，使用 start 时间
-	if end.Sub(start) < 24*time.Hour {
-		return formatIndexName(indexPattern, start)
+	var indices []string
+	seen := map[string]bool{}
+	day := time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, start.Location())
+	for !day.After(end) {
+		name := formatIndexName(indexPattern, day)
+		if !seen[name] {
+			indices = append(indices, name)
+			seen[name] = true
+		}
+		day = day.AddDate(0, 0, 1)
 	}
-
-	// 对于跨天查询，使用逗号分隔的索引列表（ES 支持）
-	// 这里简化处理，返回通配符模式
-	return formatIndexName(indexPattern, start) + "," + formatIndexName(indexPattern, end)
+	return strings.Join(indices, ",")
 }
 
 func formatIndexName(pattern string, t time.Time) string {
 	// 替换日期格式占位符
+	pattern = strings.ReplaceAll(pattern, "{yyyyMMdd}", t.Format("20060102"))
 	result := strings.ReplaceAll(pattern, "{yyyy.MM.dd}", t.Format("2006.01.02"))
 	result = strings.ReplaceAll(result, "{yyyy.MM}", t.Format("2006.01"))
 	result = strings.ReplaceAll(result, "{yyyy}", t.Format("2006"))
@@ -206,6 +262,8 @@ type searchResult struct {
 		} `json:"total"`
 		Hits []struct {
 			Source map[string]interface{} `json:"_source"`
+			Index  string                 `json:"_index"`
+			ID     string                 `json:"_id"`
 		} `json:"hits"`
 	} `json:"hits"`
 }

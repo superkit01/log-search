@@ -38,7 +38,7 @@ func main() {
 			slog.Error("invalid elasticsearch timeout", "err", err)
 			os.Exit(1)
 		}
-		client = elasticsearch.NewHTTPClient(cfg.Storage.ES.URL, cfg.Storage.ES.Index, timeout)
+		client = elasticsearch.NewHTTPClient(cfg.Storage.ES.URL, cfg.Storage.ES.Index, timeout, elasticsearch.Options{Fields: cfg.Storage.ES.Fields, IndexTimezone: cfg.Storage.ES.IndexTimezone})
 		limit = cfg.Storage.ES.DefaultLimit
 		slog.Info("using Elasticsearch storage", "url", cfg.Storage.ES.URL, "index", cfg.Storage.ES.Index)
 	default: // loki

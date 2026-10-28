@@ -21,7 +21,7 @@ func TestMountAssets_ServesIndexAndStatic(t *testing.T) {
 	}
 	New(&mockStorage{}, 1000, UIOptions{
 		Envs: []Choice{{Label: "预发", Value: "staging"}},
-		Apps: []string{"boeet-alarm"},
+		Apps: []string{"alert-service"},
 	}).Register(r)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -36,7 +36,7 @@ func TestMountAssets_ServesIndexAndStatic(t *testing.T) {
 	if !strings.Contains(w.Body.String(), `data-value="staging"`) {
 		t.Errorf("GET / body missing configured env: %s", w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), `value="boeet-alarm"`) {
+	if !strings.Contains(w.Body.String(), `value="alert-service"`) {
 		t.Errorf("GET / body missing configured app: %s", w.Body.String())
 	}
 	if strings.Contains(w.Body.String(), `LOG_SEARCH_CONFIG`) || strings.Contains(w.Body.String(), `defaultLimit`) {
@@ -76,5 +76,29 @@ func TestIndex_EmptyUIOptionsFallsBackToDefaultEnv(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), `data-value="demo"`) {
 		t.Errorf("GET / body missing fallback env: %s", w.Body.String())
+	}
+}
+
+func TestIndexNamespaceApps(t *testing.T) {
+	r := gin.New()
+	if err := MountAssets(r, assets.FS); err != nil {
+		t.Fatal(err)
+	}
+	New(&mockStorage{}, 100, UIOptions{Namespaces: []Choice{
+		{Value: "default", Label: "默认", Apps: []string{"gateway"}},
+		{Value: "pts", Label: "试验", Apps: []string{"worker"}},
+	}, Apps: []string{"legacy"}}).Register(r)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+	if w.Code != http.StatusOK {
+		t.Fatal(w.Body.String())
+	}
+	for _, option := range []string{`data-namespace="default" value="gateway"`, `data-namespace="pts" value="worker"`} {
+		if !strings.Contains(w.Body.String(), option) {
+			t.Errorf("missing %s", option)
+		}
+	}
+	if strings.Contains(w.Body.String(), `value="legacy"`) {
+		t.Error("global apps should not appear in scoped list")
 	}
 }

@@ -7,6 +7,10 @@ import (
 )
 
 func buildESQuery(filters storage.QueryFilters) map[string]interface{} {
+	return buildESQueryWithFields(filters, FieldMapping{Env: "env", App: "app.keyword", Level: "level", TraceID: "traceId", UppercaseLevels: true})
+}
+
+func buildESQueryWithFields(filters storage.QueryFilters, fields FieldMapping) map[string]interface{} {
 	query := map[string]interface{}{
 		"bool": map[string]interface{}{
 			"must": []interface{}{},
@@ -14,16 +18,24 @@ func buildESQuery(filters storage.QueryFilters) map[string]interface{} {
 	}
 	mustList := query["bool"].(map[string]interface{})["must"].([]interface{})
 
+	if namespace := strings.TrimSpace(filters.Namespace); namespace != "" {
+		mustList = append(mustList, term("namespace", namespace))
+	}
 	if env := strings.TrimSpace(filters.Env); env != "" {
-		mustList = append(mustList, term("env.keyword", env))
+		mustList = append(mustList, term(fields.Env, env))
 	}
 	if app := strings.TrimSpace(filters.App); app != "" {
-		mustList = append(mustList, term("app.keyword", app))
+		mustList = append(mustList, term(fields.App, app))
 	}
 	if levels := filters.NormalizedLevels(); len(levels) > 0 {
+		if fields.UppercaseLevels {
+			for i := range levels {
+				levels[i] = strings.ToUpper(levels[i])
+			}
+		}
 		mustList = append(mustList, map[string]interface{}{
 			"terms": map[string]interface{}{
-				"level.keyword": levels,
+				fields.Level: levels,
 			},
 		})
 	}
@@ -45,9 +57,16 @@ func buildESQuery(filters storage.QueryFilters) map[string]interface{} {
 		})
 	}
 	if traceID := strings.TrimSpace(filters.TraceID); traceID != "" {
-		mustList = append(mustList, term("tid.keyword", traceID))
+		mustList = append(mustList, term(fields.TraceID, traceID))
 	}
 
+	for _, field := range []struct{ name, value string }{
+		{"spanId", filters.SpanID}, {"parentSpanId", filters.ParentSpanID}, {"taskId", filters.TaskID},
+	} {
+		if value := strings.TrimSpace(field.value); value != "" {
+			mustList = append(mustList, term(field.name, value))
+		}
+	}
 	query["bool"].(map[string]interface{})["must"] = mustList
 	return query
 }

@@ -1,4 +1,15 @@
 const $ = (id) => document.getElementById(id);
+const configuredAppOptions = Array.from($("app-select").options).filter(option => option.value).map(option => option.cloneNode(true));
+function refreshNamespaceApps() {
+  const select = $("app-select");
+  const previous = select.value;
+  const namespace = activeTabValue("namespace-tabs");
+  const scoped = !!$("namespace-tabs");
+  select.replaceChildren(new Option("不限", ""));
+  configuredAppOptions.filter(option => !scoped || option.dataset.namespace === namespace).forEach(option => select.appendChild(option.cloneNode(true)));
+  select.value = Array.from(select.options).some(option => option.value === previous) ? previous : "";
+  syncClearButtons();
+}
 let chart;
 let currentLines = [];
 let nextCursor = "";
@@ -67,24 +78,29 @@ function saveFilters() {
     const levels = Array.from(levelTabs).map(t => t.dataset.value);
     const directionTab = document.querySelector("#direction-tabs .env-tab.active");
     const direction = directionTab ? directionTab.dataset.value : "BACKWARD";
-    const filters = { env, levels, direction };
+    const filters = { namespace: activeTabValue("namespace-tabs"), env, levels, direction };
     localStorage.setItem(FILTERS_KEY, JSON.stringify(filters));
   } catch (_) { /* localStorage 不可用时忽略,不阻塞查询 */ }
 }
 
 // loadFilters 从 localStorage 恢复 env、level、direction;无记录或解析失败用默认值(env=首个配置项、level 全选、direction=BACKWARD)。
 function loadFilters() {
-  let env = "", levels = DEFAULT_LEVELS, direction = "";
+  let namespace = "", env = "", levels = DEFAULT_LEVELS, direction = "";
   try {
     const raw = localStorage.getItem(FILTERS_KEY);
     if (raw) {
       const f = JSON.parse(raw);
+      if (f && typeof f.namespace === "string") namespace = f.namespace;
       if (f && typeof f.env === "string") env = f.env;
       if (f && Array.isArray(f.levels) && f.levels.length > 0) levels = f.levels;
       if (f && typeof f.direction === "string") direction = f.direction;
     }
   } catch (_) { /* 解析失败用默认值 */ }
 
+  const namespaceTabs = Array.from(document.querySelectorAll("#namespace-tabs .env-tab"));
+  const selectedNamespace = namespaceTabs.find(tab => tab.dataset.value === namespace) || namespaceTabs[0];
+  setActiveTabValue("namespace-tabs", selectedNamespace ? selectedNamespace.dataset.value : "");
+  refreshNamespaceApps();
   const defaultEnvTab = document.querySelector("#env-tabs .env-tab");
   setActiveLevels(levels);
   setActiveTabValue("env-tabs", env || (defaultEnvTab ? defaultEnvTab.dataset.value : ""));
@@ -124,6 +140,15 @@ document.querySelectorAll("#env-tabs .env-tab").forEach((tab) => {
     tab.classList.add("active");
     saveFilters();
   });
+});
+
+document.querySelectorAll("#namespace-tabs .env-tab").forEach(tab => {
+ tab.addEventListener("click", () => {
+ setActiveTabValue("namespace-tabs", tab.dataset.value);
+ refreshNamespaceApps();
+ saveFilters();
+ search();
+ });
 });
 
 // 方向选项卡点击处理
@@ -175,7 +200,7 @@ function bindClear(inputId, clearId, evt) {
   clearSyncers.push(sync);
 }
 bindClear("app-select", "app-clear", "change");
-bindClear("trace-id", "trace-id-clear", "input");
+["trace-id", "span-id", "parent-span-id", "task-id"].forEach(id => bindClear(id, id + "-clear", "input"));
 bindClear("keyword", "keyword-clear", "input");
 
 function syncClearButtons() {
@@ -183,7 +208,7 @@ function syncClearButtons() {
 }
 
 // 文本输入框失焦时裁掉首尾空白(粘贴 traceId 时常见带尾随换行),避免把空格带入查询。
-["keyword", "trace-id"].forEach((id) => {
+["keyword", "trace-id", "span-id", "parent-span-id", "task-id"].forEach((id) => {
   $(id).addEventListener("blur", (e) => { e.target.value = e.target.value.trim(); });
 });
 
@@ -224,22 +249,31 @@ function queryLevels() {
 function currentShareState() {
   const levels = queryLevels();
   return {
+    namespace: activeTabValue("namespace-tabs"),
     env: activeTabValue("env-tabs"),
     app: $("app-select").value,
     levels,
     direction: activeTabValue("direction-tabs") || "BACKWARD",
     keyword: $("keyword").value.trim(),
     traceId: $("trace-id").value.trim(),
+ spanId: $("span-id").value.trim(),
+ parentSpanId: $("parent-span-id").value.trim(),
+ taskId: $("task-id").value.trim(),
     start: toUnix($("start").value),
     end: toUnix($("end").value),
   };
 }
 
 function applyShareState(state) {
+  if (state.namespace) setActiveTabValue("namespace-tabs", state.namespace);
+  refreshNamespaceApps();
   if (state.start) $("start").value = toLocalInput(state.start);
   if (state.end) $("end").value = toLocalInput(state.end);
   $("keyword").value = state.keyword || "";
   $("trace-id").value = state.traceId || "";
+ $("span-id").value = state.spanId || "";
+ $("parent-span-id").value = state.parentSpanId || "";
+ $("task-id").value = state.taskId || "";
   setActiveTabValue("env-tabs", state.env || "");
   setActiveLevels(state.levels || []);
   if (state.direction) setActiveTabValue("direction-tabs", state.direction);
@@ -248,6 +282,7 @@ function applyShareState(state) {
 function setSelectValue(sel, value) {
   if (!value) { sel.value = ""; return; }
   if (!Array.from(sel.options).some((o) => o.value === value)) {
+    if ($("namespace-tabs")) { sel.value = ""; return; }
     const o = document.createElement("option");
     o.value = value; o.textContent = value;
     sel.appendChild(o);
@@ -298,7 +333,8 @@ async function search(options) {
   const end = toUnix($("end").value);
   if (!start || !end) { showError("请选择时间范围"); return; }
   const direction = activeTabValue("direction-tabs") || "BACKWARD";
-  const payload = { env, app, levels, keyword, traceId, start, end, direction };
+  const { namespace, spanId, parentSpanId, taskId } = currentShareState();
+ const payload = { namespace, env, app, levels, keyword, traceId, spanId, parentSpanId, taskId, start, end, direction };
   lastQueryPayload = payload;
   try {
     const j = await apiJSON("/api/query_range", payload);
@@ -392,7 +428,7 @@ function renderResults(allLines, pageLines, append) {
     if (l.labels) {
       let idx = 0;
       Object.entries(l.labels).forEach(([key, value]) => {
-        if (key !== "app" && key !== "level") {
+        if (key !== "app" && key !== "level" && !(key === "tid" && l.labels.traceId)) {
           tags.appendChild(makeCopyableTag(key, value, TAG_PALETTE[idx % TAG_PALETTE.length], l));
           idx++;
         }
@@ -480,7 +516,7 @@ function makeCopyableTag(key, value, extraClass, line) {
   tag.textContent = key + ": " + value;
   tag.dataset.key = key;
   tag.dataset.value = String(value);
-  if (key === "tid") {
+  if (key === "tid" || key === "traceId") {
     tag.title = "打开链路日志";
     tag.addEventListener("click", () => openTraceDrilldown(line, String(value)));
   } else {

@@ -65,8 +65,8 @@ ui:
     - label: 生产
       value: prod
   apps:
-    - boeet-alarm
-    - boeet-cms
+    - alert-service
+    - content-service
 `)
 	c, err := Load(p)
 	if err != nil {
@@ -75,7 +75,7 @@ ui:
 	if len(c.UI.Envs) != 2 || c.UI.Envs[0].Label != "预发" || c.UI.Envs[0].Value != "staging" {
 		t.Fatalf("envs = %+v", c.UI.Envs)
 	}
-	if len(c.UI.Apps) != 2 || c.UI.Apps[1] != "boeet-cms" {
+	if len(c.UI.Apps) != 2 || c.UI.Apps[1] != "content-service" {
 		t.Fatalf("apps = %+v", c.UI.Apps)
 	}
 }
@@ -264,5 +264,16 @@ storage:
 				}
 			}
 		})
+	}
+}
+
+func TestNamespaceAppsNormalization(t *testing.T) {
+	ui := UICfg{Namespaces: []UIOption{{Value: "default", Apps: []string{" gateway ", "", " worker "}}}}
+	if err := validateUIOptions(&ui); err != nil {
+		t.Fatal(err)
+	}
+	apps := ui.Namespaces[0].Apps
+	if len(apps) != 2 || apps[0] != "gateway" || apps[1] != "worker" {
+		t.Fatalf("apps = %#v", apps)
 	}
 }

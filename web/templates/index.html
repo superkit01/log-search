@@ -10,6 +10,11 @@
 <body>
   <header>
     <h1>日志查询</h1>
+    {{if .namespaces}}
+    <div class="env-tabs namespace-tabs" id="namespace-tabs" aria-label="平台切换">
+      {{range .namespaces}}<button type="button" class="env-tab" data-value="{{.Value}}"{{if .Description}} title="{{.Description}}"{{end}}>{{.Label}}</button>{{end}}
+    </div>
+    {{end}}
     <div class="header-actions">
       <button type="button" id="share" class="theme-toggle share-toggle" title="复制分享链接" aria-label="复制分享链接">
         <svg class="share-icon-copy" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -60,7 +65,9 @@
           <span class="clear-field clear-field-select">
             <select id="app-select">
               <option value="">不限</option>
-              {{range .apps}}<option value="{{.}}">{{.}}</option>{{end}}
+              {{if .namespaces}}
+              {{range .namespaces}}{{$namespace := .Value}}{{range .Apps}}<option data-namespace="{{$namespace}}" value="{{.}}">{{.}}</option>{{end}}{{end}}
+              {{else}}{{range .apps}}<option value="{{.}}">{{.}}</option>{{end}}{{end}}
             </select>
             <button type="button" id="app-clear" class="clear-icon" title="清除应用筛选" aria-label="清除应用筛选" hidden>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -83,10 +90,43 @@
             <button type="button" class="time-shortcut" data-range="today">今天</button>
           </span>
         </div>
-        <label><span class="lbl">链路id</span>
+        <label><span class="lbl">TraceId</span>
           <span class="clear-field">
             <input type="text" id="trace-id" placeholder="TraceId">
             <button type="button" id="trace-id-clear" class="clear-icon" title="清除" aria-label="清除链路id" hidden>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+              </svg>
+            </button>
+          </span>
+        </label>
+        <label><span class="lbl">SpanId</span>
+          <span class="clear-field">
+            <input type="text" id="span-id" placeholder="SpanId">
+            <button type="button" id="span-id-clear" class="clear-icon" title="清除" aria-label="清除SpanId" hidden>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+              </svg>
+            </button>
+          </span>
+        </label>
+        <label><span class="lbl">父级SpanId</span>
+          <span class="clear-field">
+            <input type="text" id="parent-span-id" placeholder="父级SpanId">
+            <button type="button" id="parent-span-id-clear" class="clear-icon" title="清除" aria-label="清除父级SpanId" hidden>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+              </svg>
+            </button>
+          </span>
+        </label>
+        <label><span class="lbl">TaskId</span>
+          <span class="clear-field">
+            <input type="text" id="task-id" placeholder="TaskId">
+            <button type="button" id="task-id-clear" class="clear-icon" title="清除" aria-label="清除TaskId" hidden>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <line x1="6" y1="6" x2="18" y2="18"></line>
                 <line x1="18" y1="6" x2="6" y2="18"></line>

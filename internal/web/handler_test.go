@@ -57,7 +57,7 @@ func TestQueryRange_OK_FillsLevel(t *testing.T) {
 		Total: 1,
 	}}
 	r := setupRouter(m)
-	req := postQueryRange(`{"env":"prod","app":"api","levels":["warn","error"],"keyword":"timeout","traceId":"abc123","start":1,"end":99999,"direction":"FORWARD"}`)
+	req := postQueryRange(`{"env":"prod","app":"api","levels":["warn","error"],"keyword":"timeout","traceId":"abc123","spanId":" span-1 ","parentSpanId":" parent-1 ","taskId":" task-1 ","start":1,"end":99999,"direction":"FORWARD"}`)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -77,6 +77,7 @@ func TestQueryRange_OK_FillsLevel(t *testing.T) {
 		Levels:  []string{"warn", "error"},
 		Keyword: "timeout",
 		TraceID: "abc123",
+		SpanID:  "span-1", ParentSpanID: "parent-1", TaskID: "task-1",
 	}
 	if !reflect.DeepEqual(m.lastFilters, wantFilters) {
 		t.Fatalf("filters = %#v, want %#v", m.lastFilters, wantFilters)
@@ -129,10 +130,11 @@ func TestQueryRange_NormalizesTags(t *testing.T) {
 		Lines: []storage.Line{{
 			Raw: "timeout",
 			Labels: map[string]string{
-				"env":      "test",
-				"app":      "api",
-				"level":    "info",
-				"tid":      "tid-1",
+				"env":     "test",
+				"app":     "api",
+				"level":   "info",
+				"tid":     "tid-1",
+				"traceId": "tid-1", "spanId": "span-1", "parentSpanId": "parent-1", "taskId": "task-1",
 				"pod":      "api-123",
 				"trace_id": "legacy",
 			},
@@ -153,10 +155,11 @@ func TestQueryRange_NormalizesTags(t *testing.T) {
 	}
 	got := res.Lines[0].Labels
 	want := map[string]string{
-		"env":   "test",
-		"app":   "api",
-		"level": "info",
-		"tid":   "tid-1",
+		"env":     "test",
+		"app":     "api",
+		"level":   "info",
+		"tid":     "tid-1",
+		"traceId": "tid-1", "spanId": "span-1", "parentSpanId": "parent-1", "taskId": "task-1",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("labels = %#v, want only %#v", got, want)
@@ -318,5 +321,29 @@ func TestQueryRange_LokiHTTPError_502(t *testing.T) {
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusBadGateway {
 		t.Fatalf("status = %d, want 502", w.Code)
+	}
+}
+
+func TestQueryRangeNamespaceSelection(t *testing.T) {
+	for _, tc := range []struct {
+		namespace string
+		status    int
+		want      string
+	}{
+		{"", 200, "default"}, {"ems", 200, "ems"}, {"*", 400, ""}, {"other", 400, ""},
+	} {
+		t.Run(tc.namespace, func(t *testing.T) {
+			m := &mockStorage{result: &storage.QueryResult{Lines: []storage.Line{}}}
+			r := gin.New()
+			New(m, 100, UIOptions{Namespaces: []Choice{{Value: "default"}, {Value: "ems"}}}).Register(r)
+			w := httptest.NewRecorder()
+			r.ServeHTTP(w, postQueryRange(`{"env":"dev","start":1,"end":99999,"namespace":"`+tc.namespace+`"}`))
+			if w.Code != tc.status {
+				t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+			}
+			if tc.status == 200 && m.lastFilters.Namespace != tc.want {
+				t.Fatalf("namespace=%q", m.lastFilters.Namespace)
+			}
+		})
 	}
 }

@@ -18,11 +18,11 @@ func TestBuildESQueryUsesStructuredFilters(t *testing.T) {
 
 	must := got["bool"].(map[string]interface{})["must"].([]interface{})
 	want := []interface{}{
-		map[string]interface{}{"term": map[string]interface{}{"env.keyword": "test"}},
+		map[string]interface{}{"term": map[string]interface{}{"env": "test"}},
 		map[string]interface{}{"term": map[string]interface{}{"app.keyword": "api-server"}},
-		map[string]interface{}{"terms": map[string]interface{}{"level.keyword": []string{"warn", "error"}}},
+		map[string]interface{}{"terms": map[string]interface{}{"level": []string{"WARN", "ERROR"}}},
 		map[string]interface{}{"match_phrase": map[string]interface{}{"message": "timeout"}},
-		map[string]interface{}{"term": map[string]interface{}{"tid.keyword": "tid-0001"}},
+		map[string]interface{}{"term": map[string]interface{}{"traceId": "tid-0001"}},
 	}
 	if !reflect.DeepEqual(must, want) {
 		t.Fatalf("must = %#v, want %#v", must, want)
@@ -37,8 +37,8 @@ func TestBuildESQueryIgnoresInvalidLevels(t *testing.T) {
 
 	must := got["bool"].(map[string]interface{})["must"].([]interface{})
 	want := []interface{}{
-		map[string]interface{}{"term": map[string]interface{}{"env.keyword": "test"}},
-		map[string]interface{}{"terms": map[string]interface{}{"level.keyword": []string{"info", "error"}}},
+		map[string]interface{}{"term": map[string]interface{}{"env": "test"}},
+		map[string]interface{}{"terms": map[string]interface{}{"level": []string{"INFO", "ERROR"}}},
 	}
 	if !reflect.DeepEqual(must, want) {
 		t.Fatalf("must = %#v, want %#v", must, want)
@@ -53,7 +53,7 @@ func TestBuildESQueryKeywordAnd(t *testing.T) {
 
 	must := got["bool"].(map[string]interface{})["must"].([]interface{})
 	want := []interface{}{
-		map[string]interface{}{"term": map[string]interface{}{"env.keyword": "test"}},
+		map[string]interface{}{"term": map[string]interface{}{"env": "test"}},
 		map[string]interface{}{"match_phrase": map[string]interface{}{"message": "timeout"}},
 		map[string]interface{}{"match_phrase": map[string]interface{}{"message": "retry"}},
 	}
@@ -70,7 +70,7 @@ func TestBuildESQueryKeywordOr(t *testing.T) {
 
 	must := got["bool"].(map[string]interface{})["must"].([]interface{})
 	want := []interface{}{
-		map[string]interface{}{"term": map[string]interface{}{"env.keyword": "test"}},
+		map[string]interface{}{"term": map[string]interface{}{"env": "test"}},
 		map[string]interface{}{
 			"bool": map[string]interface{}{
 				"should": []interface{}{

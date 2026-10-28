@@ -5,6 +5,7 @@ function traceDrilldownState(current, line, traceId) {
   const tid = (traceId || "").trim();
   if (!Number.isFinite(ts) || !tid) return null;
   return {
+    namespace: (current && current.namespace) || ((line && line.labels) || {}).namespace || "",
     env: (current && current.env) || ((line && line.labels) || {}).env || "",
     app: "",
     levels: [],

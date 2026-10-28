@@ -159,3 +159,53 @@ go build -ldflags="-s -w" -o bin/log-search ./cmd/server
 服务器架构用 `uname -m` 确认:`x86_64` → `amd64`;`aarch64` → `arm64`。
 
 仓库自带的 `Dockerfile`(多阶段构建)也可直接用于部署,无需手动指定目标架构。
+
+
+### Logstash 应用日志接入
+
+当前示例配置适配 `app-log-{namespace}-{env}-{yyyyMMdd}`，分日时区为 `Asia/Shanghai`，环境为 `dev`，应用列表默认为空（查询时选择“不限”）。在各 namespace 的 `apps` 下填写实际应用名；执行 `go run ./cmd/server` 后查询今天的日志。已有浏览器保存的环境可能仍为 `demo` 或 `test`，请切换到“开发”。
+
+ES 的精确查询字段可通过 `storage.elasticsearch.fields` 配置：`env: env`、`app: app.keyword`、`level: level`、`trace_id: traceId`、`uppercase_levels: true`。这些设置适配当前线上 mapping；未配置时仍使用旧格式的 `.keyword` 字段与 `tid.keyword`。如果将来 app 显式改成 keyword，需要将 `fields.app` 改成 `app`，历史 text 索引应分开配置查询。
+
+`index_timezone` 指定索引日期时区（默认 UTC）；支持 `{yyyyMMdd}`、`{yyyy.MM.dd}`、`{yyyy.MM}`、`{yyyy}` 与 `{env}`。使用 `app-log-{namespace}-{env}-{yyyyMMdd}`，顶部平台按钮从 `ui.namespaces` 读取 label/value；默认选择第一项，支持记忆、分享链接和 Trace 跳转。后端只接受配置内的 namespace。平台切换属于查询范围选择，不代替用户身份认证。
+
+列表支持正文关键词、级别和顶层 traceId 精确查询；traceId 映射到现有 tid 标签用于关联跳转。日志保留 index/id，异常堆栈附在正文后展示。分页继续沿用时间戳游标，同一时间戳超过单页大小时可能漏行；PIT 分页、独立详情接口及 logger 筛选器尚未实现。
+
+只读联调测试可设置 `LOG_SEARCH_TEST_ES_URL` 后运行 `go test ./internal/elasticsearch -run TestLiveLogstash -v`，验证 2026-10-28 的日志。可通过 `LOG_SEARCH_TEST_ES_APP` 和 `LOG_SEARCH_TEST_ES_TRACE_ID` 指定真实应用名与 TraceId，未设置时不添加对应筛选条件。
+
+链路筛选支持 `traceId`、`spanId`、`parentSpanId`、`taskId`，均为精确匹配；多项同时填写时按 AND 组合。标签只展示实际有值的字段，分享链接保存全部链路筛选条件。
+
+平台选项配置示例：
+
+```yaml
+ui:
+  namespaces:
+    - label: 默认平台
+      value: default
+      description: 默认业务空间的应用日志
+    - label: EMS
+      value: ems
+      description: EMS 平台应用日志
+```
+
+`storage.elasticsearch.index` 设置为 `app-log-{namespace}-{env}-{yyyyMMdd}`。切换平台会立即重新查询；新增平台只需添加配置项并重启应用。
+
+`ui.namespaces[].description` 为可选说明，鼠标悬停平台按钮时显示。
+
+应用按平台配置在 `ui.namespaces[].apps` 下，例如：
+
+```yaml
+ui:
+  namespaces:
+    - label: 综合能源平台
+      value: default
+      description: 综合能源平台应用日志
+      apps:
+        - gateway
+        - api-server
+    - label: 预防性试验
+      value: pts
+      apps: []
+```
+
+切换 namespace 后只显示该平台应用，原选择不在新列表时恢复“不限”；未配置 apps 的平台仅显示“不限”。无 namespace 配置的旧部署仍支持 `ui.apps`。

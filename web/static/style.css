@@ -313,4 +313,7 @@ body.light-theme .line .txt-wrapper.collapsed .txt-preview::after {
 
 /* 输入框固定宽度:应用/时间 190px;链路/关键词 500px */
 #app-select { width: 190px; }
-#trace-id, #keyword { width: 500px; }
+#trace-id, #span-id, #parent-span-id, #task-id, #keyword { width: 500px; }
+
+header { gap: 20px; flex-wrap: wrap; }
+.namespace-tabs { margin-right: auto; flex-wrap: wrap; }

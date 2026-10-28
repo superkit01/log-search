@@ -15,11 +15,15 @@ type Client interface {
 // QueryFilters 是页面筛选条件的存储无关表示。具体后端自行把它转换为
 // Loki LogQL 或 Elasticsearch DSL。
 type QueryFilters struct {
-	Env     string
-	App     string
-	Levels  []string
-	Keyword string
-	TraceID string
+	Namespace    string
+	Env          string
+	App          string
+	Levels       []string
+	Keyword      string
+	SpanID       string
+	ParentSpanID string
+	TaskID       string
+	TraceID      string
 }
 
 type KeywordOperator string
@@ -104,6 +108,8 @@ func isKnownLevel(level string) bool {
 
 // Line 是拍平后的单条日志。Level 由上层(web)填充。
 type Line struct {
+	Index  string            `json:"index,omitempty"`
+	ID     string            `json:"id,omitempty"`
 	Time   time.Time         `json:"ts"`
 	Level  string            `json:"level"`
 	Raw    string            `json:"line"`
