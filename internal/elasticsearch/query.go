@@ -62,6 +62,7 @@ func buildESQueryWithFields(filters storage.QueryFilters, fields FieldMapping) m
 
 	for _, field := range []struct{ name, value string }{
 		{"spanId", filters.SpanID}, {"parentSpanId", filters.ParentSpanID}, {"taskId", filters.TaskID},
+		{"messageId", filters.MessageID},
 	} {
 		if value := strings.TrimSpace(field.value); value != "" {
 			mustList = append(mustList, term(field.name, value))

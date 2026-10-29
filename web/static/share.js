@@ -1,4 +1,4 @@
-const SHARE_KEYS = ["namespace", "env", "app", "levels", "direction", "keyword", "trace_id", "span_id", "parent_span_id", "task_id", "start", "end"];
+const SHARE_KEYS = ["namespace", "env", "app", "levels", "direction", "keyword", "trace_id", "span_id", "parent_span_id", "task_id", "message_id", "start", "end"];
 const SHARE_LEVELS = typeof LEVEL_ORDER !== "undefined" ? LEVEL_ORDER : require("./levels.js").LEVEL_ORDER;
 const VALID_LEVELS = new Set(SHARE_LEVELS);
 const VALID_DIRECTIONS = new Set(["BACKWARD", "FORWARD"]);
@@ -30,7 +30,7 @@ function encodeShareState(state) {
   if (VALID_DIRECTIONS.has(direction)) params.set("direction", direction);
   if (keyword) params.set("keyword", keyword);
   if (traceId) params.set("trace_id", traceId);
- for (const [key, param] of [["spanId", "span_id"], ["parentSpanId", "parent_span_id"], ["taskId", "task_id"]]) {
+ for (const [key, param] of [["spanId", "span_id"], ["parentSpanId", "parent_span_id"], ["taskId", "task_id"], ["messageId", "message_id"]]) {
  const value = normalizeText(state && state[key]);
  if (value) params.set(param, value);
  }
@@ -60,6 +60,7 @@ function decodeShareState(search) {
  spanId: normalizeText(params.get("span_id")),
  parentSpanId: normalizeText(params.get("parent_span_id")),
  taskId: normalizeText(params.get("task_id")),
+    messageId: normalizeText(params.get("message_id")),
     start: positiveInt(params.get("start")),
     end: positiveInt(params.get("end")),
   };

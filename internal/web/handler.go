@@ -99,24 +99,41 @@ func (h *Handler) queryRange(c *gin.Context) {
 		direction = storage.Forward
 	}
 	if req.Cursor != "" {
-		ns, err := strconv.ParseInt(req.Cursor, 10, 64)
-		if err != nil || ns <= 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "cursor must be a positive unix nanosecond timestamp"})
-			return
-		}
-		if direction == storage.Forward {
-			start = time.Unix(0, ns+1)
+		if strings.HasPrefix(req.Cursor, "es1:") {
+			if _, ok := h.Client.(storage.CursorClient); !ok {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "cursor is not supported by this storage backend"})
+				return
+			}
 		} else {
-			end = time.Unix(0, ns-1)
-		}
-		if !end.After(start) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "cursor leaves no remaining time range"})
-			return
+			ns, err := strconv.ParseInt(req.Cursor, 10, 64)
+			if err != nil || ns <= 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "cursor must be a positive unix nanosecond timestamp"})
+				return
+			}
+			if direction == storage.Forward {
+				start = time.Unix(0, ns+1)
+			} else {
+				end = time.Unix(0, ns-1)
+			}
+			if !end.After(start) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "cursor leaves no remaining time range"})
+				return
+			}
 		}
 	}
 	log.Printf("[Storage Query] filters=%+v start=%s end=%s limit=%d direction=%s cursor=%s",
 		filters, start.Format(time.RFC3339), end.Format(time.RFC3339), limit, direction, req.Cursor)
-	res, err := h.Client.QueryRange(c.Request.Context(), filters, start, end, limit, direction)
+	var res *storage.QueryResult
+	var err error
+	if paged, ok := h.Client.(storage.CursorClient); ok && (req.Cursor == "" || strings.HasPrefix(req.Cursor, "es1:")) {
+		cursor := ""
+		if strings.HasPrefix(req.Cursor, "es1:") {
+			cursor = req.Cursor
+		}
+		res, err = paged.QueryRangePage(c.Request.Context(), filters, start, end, limit, direction, cursor)
+	} else {
+		res, err = h.Client.QueryRange(c.Request.Context(), filters, start, end, limit, direction)
+	}
 	if err != nil {
 		status, body := storageStatusAndBody(err)
 		log.Printf("[Storage Error] %s %s: %v", c.Request.Method, c.Request.URL.Path, err)
@@ -133,7 +150,9 @@ func (h *Handler) queryRange(c *gin.Context) {
 		}
 		res.Lines[i].Labels = normalizeLineTags(res.Lines[i].Labels)
 	}
-	if len(res.Lines) >= limit {
+	if res.Page != nil {
+		res.NextCursor = res.Page.Continuation
+	} else if len(res.Lines) >= limit {
 		res.NextCursor = strconv.FormatInt(res.Lines[len(res.Lines)-1].Time.UnixNano(), 10)
 	}
 	c.JSON(http.StatusOK, res)
@@ -143,7 +162,7 @@ const maxQueryRangeBodyBytes int64 = 16 * 1024
 
 // logTagKeys is the single allowlist for tags returned to the browser. Add new
 // keys here when the UI should display another stable Loki label.
-var logTagKeys = []string{"env", "app", "level", "tid", "traceId", "namespace", "spanId", "parentSpanId", "taskId", "logger_name", "thread_name", "host"}
+var logTagKeys = []string{"env", "app", "level", "tid", "traceId", "namespace", "spanId", "parentSpanId", "taskId", "messageId", "sequence", "logger_name", "thread_name", "host"}
 
 func normalizeLineTags(labels map[string]string) map[string]string {
 	out := make(map[string]string, len(logTagKeys))

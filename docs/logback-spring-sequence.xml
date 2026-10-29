@@ -1,0 +1,134 @@
+<configuration>
+    <sequenceNumberGenerator class="ch.qos.logback.core.spi.BasicSequenceNumberGenerator"/>
+    <!-- 获取yml中的APP_NAME -->
+    <springProperty name="LOGGING_LEVEL_ROOT" scope="context" source="logging.level.root" defaultValue="info"/>
+    <!-- 获取yml中的APP_NAME -->
+    <springProperty name="APP_NAME" scope="context" source="spring.application.name" defaultValue="boeet-xxxx"/>
+    <!-- 日志存放路径 -->
+    <property name="LOG_PATH" value="/u01/logs/${APP_NAME}" />
+    <!-- 日志输出格式 -->
+    <property name="LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{20} - [%method,%line] - %msg%n" />
+    <!-- 控制台输出 -->
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+    </appender>
+    <!-- 日志文件 -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        <file>${LOG_PATH}/appLog.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_PATH}/applog-%d{yyyyMMdd}-%i.log.gz</fileNamePattern>
+            <maxHistory>60</maxHistory>   <!-- 保存60天 -->
+            <maxFileSize>512MB</maxFileSize> <!-- 单个文件大小 -->
+            <totalSizeCap>5GB</totalSizeCap><!-- 总日志大小 -->
+        </rollingPolicy>
+    </appender>
+    <!-- ERROR文件 -->
+    <appender name="FILE_ERROR" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+        <file>${LOG_PATH}/error.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy"> <!-- 循环政策：基于时间创建日志文件 -->
+            <fileNamePattern>${LOG_PATH}/error.%d{yyyy-MM-dd}.log</fileNamePattern> <!-- 日志文件名格式 -->
+            <maxHistory>60</maxHistory>   <!-- 保存60天 -->
+            <maxFileSize>512MB</maxFileSize> <!-- 单个文件大小 -->
+            <totalSizeCap>5GB</totalSizeCap><!-- 总日志大小 -->
+        </rollingPolicy>
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <!-- 过滤的级别 -->
+            <level>ERROR</level>
+            <!-- 匹配时的操作：接收（记录） -->
+            <onMatch>ACCEPT</onMatch>
+            <!-- 不匹配时的操作：拒绝（不记录） -->
+            <onMismatch>DENY</onMismatch>
+        </filter>
+    </appender>
+
+    <appender name="ASYNC" class="ch.qos.logback.classic.AsyncAppender">
+        <discardingThreshold>0</discardingThreshold>
+        <queueSize>1024</queueSize>
+        <neverBlock>true</neverBlock>
+        <!-- 异步打印堆栈信息不丢失-->
+        <includeCallerData>true</includeCallerData>
+        <!-- 添加附加的appender,最多只能添加一个 -->
+        <appender-ref ref="STDOUT"/>
+    </appender>
+
+    <appender name="ASYNC_FILE" class="ch.qos.logback.classic.AsyncAppender">
+        <discardingThreshold>0</discardingThreshold>
+        <queueSize>1024</queueSize>
+        <neverBlock>true</neverBlock>
+        <!-- 异步打印堆栈信息不丢失-->
+        <includeCallerData>true</includeCallerData>
+        <!-- 添加附加的appender,最多只能添加一个 -->
+        <appender-ref ref="FILE"/>
+    </appender>
+
+    <appender name="ASYNC_ERROR_FILE" class="ch.qos.logback.classic.AsyncAppender">
+        <discardingThreshold>0</discardingThreshold>
+        <queueSize>1024</queueSize>
+        <neverBlock>true</neverBlock>
+        <!-- 异步打印堆栈信息不丢失-->
+        <includeCallerData>true</includeCallerData>
+        <!-- 添加附加的appender,最多只能添加一个 -->
+        <appender-ref ref="FILE_ERROR"/>
+    </appender>
+
+    <springProperty name="kafkaServer" scope="context" source="kafkaServer" defaultValue="10.197.220.109:9092"/>
+    <springProperty name="env" scope="context" source="spring.profiles.active" defaultValue="dev"/>
+
+    <appender name="KAFKA" class="com.github.danielwegener.logback.kafka.KafkaAppender">
+        <encoder class="ch.qos.logback.core.encoder.LayoutWrappingEncoder">
+            <layout class="org.apache.skywalking.apm.toolkit.log.logback.v1.x.mdc.TraceIdMDCPatternLogbackLayout">
+                <pattern>${APP_NAME} | %d{yyyy-MM-dd HH:mm:ss.SSS} | %level | ${PID} | %X{tid} | %thread |  %-40.40logger{39}  | %line | %m%n%ex</pattern>
+            </layout>
+        </encoder>
+        <topic>app-logs-${env}</topic>
+        <keyingStrategy class="com.github.danielwegener.logback.kafka.keying.NoKeyKeyingStrategy" />
+        <deliveryStrategy class="com.github.danielwegener.logback.kafka.delivery.AsynchronousDeliveryStrategy" />
+        <producerConfig>bootstrap.servers=${kafkaServer}</producerConfig>
+    </appender>
+
+
+    <property name="namespace" value="default"/>
+    <property name="LOGSTASH" value="10.197.220.110:5000"/>
+
+    <appender name="STASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+        <destination>${LOGSTASH}</destination>
+        <encoder charset="UTF-8" class="net.logstash.logback.encoder.LogstashEncoder">
+            <provider class="net.logstash.logback.composite.loggingevent.SequenceJsonProvider"/>
+            <includeContext>false</includeContext>
+            <customFields>{"app":"${APP_NAME}","env":"${env}","namespace":"${namespace}"}</customFields>
+            <!-- 默认保留时间、级别、线程、logger、正文及异常堆栈。
+                 MDC 仅输出以下四个追踪字段，不会自动创建字段值。 -->
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>spanId</includeMdcKeyName>
+            <includeMdcKeyName>parentSpanId</includeMdcKeyName>
+            <includeMdcKeyName>taskId</includeMdcKeyName>
+            <includeMdcKeyName>messageId</includeMdcKeyName>
+        </encoder>
+        <keepAliveDuration>5 minutes</keepAliveDuration>
+    </appender>
+
+    <!-- Spring日志级别控制  -->
+    <logger name="org.springframework" level="error" />
+    <!-- nacos日志级别控制  -->
+    <logger name="com.alibaba.nacos" level="error" />
+    <logger name="org.apache.kafka" level="WARN" />
+    <logger name="com.github.danielwegener.logback.kafka" level="WARN" />
+    <!--系统操作日志-->
+    <root level="${LOGGING_LEVEL_ROOT}">
+        <appender-ref ref="ASYNC" />
+        <appender-ref ref="ASYNC_FILE" />
+        <appender-ref ref="ASYNC_ERROR_FILE" />
+        <appender-ref ref="STASH" />
+    </root>
+
+</configuration>

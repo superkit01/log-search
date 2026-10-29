@@ -29,7 +29,7 @@ func TestLogstashQueryAndConversion(t *testing.T) {
 			t.Error(err)
 		}
 		encoded, _ := json.Marshal(body)
-		for _, fragment := range []string{`"env":"dev"`, `"app.keyword":"gateway"`, `"level":["INFO"]`, `"traceId":"abc"`, `"spanId":"span"`, `"parentSpanId":"parent"`, `"taskId":"task"`} {
+		for _, fragment := range []string{`"env":"dev"`, `"app.keyword":"gateway"`, `"level":["INFO"]`, `"traceId":"abc"`, `"spanId":"span"`, `"parentSpanId":"parent"`, `"taskId":"task"`, `"messageId":"message"`} {
 			if !strings.Contains(string(encoded), fragment) {
 				t.Errorf("missing %s in %s", fragment, encoded)
 			}
@@ -39,7 +39,7 @@ func TestLogstashQueryAndConversion(t *testing.T) {
 	}))
 	defer server.Close()
 	c := NewHTTPClient(server.URL, "app-log-{namespace}-{env}-{yyyyMMdd}", time.Second, logstashOptions())
-	result, err := c.QueryRange(context.Background(), storage.QueryFilters{Namespace: "default", Env: "dev", App: "gateway", Levels: []string{"info"}, TraceID: "abc", SpanID: "span", ParentSpanID: "parent", TaskID: "task"}, time.Date(2026, 10, 28, 0, 0, 0, 0, time.UTC), time.Date(2026, 10, 28, 1, 0, 0, 0, time.UTC), 100, storage.Backward)
+	result, err := c.QueryRange(context.Background(), storage.QueryFilters{Namespace: "default", Env: "dev", App: "gateway", Levels: []string{"info"}, TraceID: "abc", SpanID: "span", ParentSpanID: "parent", TaskID: "task", MessageID: "message"}, time.Date(2026, 10, 28, 0, 0, 0, 0, time.UTC), time.Date(2026, 10, 28, 1, 0, 0, 0, time.UTC), 100, storage.Backward)
 	if err != nil {
 		t.Fatal(err)
 	}

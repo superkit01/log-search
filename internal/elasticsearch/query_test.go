@@ -9,11 +9,12 @@ import (
 
 func TestBuildESQueryUsesStructuredFilters(t *testing.T) {
 	got := buildESQuery(storage.QueryFilters{
-		Env:     "test",
-		App:     "api-server",
-		Levels:  []string{"warn", "error"},
-		Keyword: "timeout",
-		TraceID: "tid-0001",
+		Env:       "test",
+		App:       "api-server",
+		Levels:    []string{"warn", "error"},
+		Keyword:   "timeout",
+		TraceID:   "tid-0001",
+		MessageID: " message-0001 ",
 	})
 
 	must := got["bool"].(map[string]interface{})["must"].([]interface{})
@@ -23,6 +24,7 @@ func TestBuildESQueryUsesStructuredFilters(t *testing.T) {
 		map[string]interface{}{"terms": map[string]interface{}{"level": []string{"WARN", "ERROR"}}},
 		map[string]interface{}{"match_phrase": map[string]interface{}{"message": "timeout"}},
 		map[string]interface{}{"term": map[string]interface{}{"traceId": "tid-0001"}},
+		map[string]interface{}{"term": map[string]interface{}{"messageId": "message-0001"}},
 	}
 	if !reflect.DeepEqual(must, want) {
 		t.Fatalf("must = %#v, want %#v", must, want)

@@ -200,7 +200,7 @@ function bindClear(inputId, clearId, evt) {
   clearSyncers.push(sync);
 }
 bindClear("app-select", "app-clear", "change");
-["trace-id", "span-id", "parent-span-id", "task-id"].forEach(id => bindClear(id, id + "-clear", "input"));
+["trace-id", "span-id", "parent-span-id", "task-id", "message-id"].forEach(id => bindClear(id, id + "-clear", "input"));
 bindClear("keyword", "keyword-clear", "input");
 
 function syncClearButtons() {
@@ -208,7 +208,7 @@ function syncClearButtons() {
 }
 
 // 文本输入框失焦时裁掉首尾空白(粘贴 traceId 时常见带尾随换行),避免把空格带入查询。
-["keyword", "trace-id", "span-id", "parent-span-id", "task-id"].forEach((id) => {
+["keyword", "trace-id", "span-id", "parent-span-id", "task-id", "message-id"].forEach((id) => {
   $(id).addEventListener("blur", (e) => { e.target.value = e.target.value.trim(); });
 });
 
@@ -259,6 +259,7 @@ function currentShareState() {
  spanId: $("span-id").value.trim(),
  parentSpanId: $("parent-span-id").value.trim(),
  taskId: $("task-id").value.trim(),
+    messageId: $("message-id").value.trim(),
     start: toUnix($("start").value),
     end: toUnix($("end").value),
   };
@@ -274,6 +275,7 @@ function applyShareState(state) {
  $("span-id").value = state.spanId || "";
  $("parent-span-id").value = state.parentSpanId || "";
  $("task-id").value = state.taskId || "";
+  $("message-id").value = state.messageId || "";
   setActiveTabValue("env-tabs", state.env || "");
   setActiveLevels(state.levels || []);
   if (state.direction) setActiveTabValue("direction-tabs", state.direction);
@@ -333,8 +335,8 @@ async function search(options) {
   const end = toUnix($("end").value);
   if (!start || !end) { showError("请选择时间范围"); return; }
   const direction = activeTabValue("direction-tabs") || "BACKWARD";
-  const { namespace, spanId, parentSpanId, taskId } = currentShareState();
- const payload = { namespace, env, app, levels, keyword, traceId, spanId, parentSpanId, taskId, start, end, direction };
+  const { namespace, spanId, parentSpanId, taskId, messageId } = currentShareState();
+ const payload = { namespace, env, app, levels, keyword, traceId, spanId, parentSpanId, taskId, messageId, start, end, direction };
   lastQueryPayload = payload;
   try {
     const j = await apiJSON("/api/query_range", payload);

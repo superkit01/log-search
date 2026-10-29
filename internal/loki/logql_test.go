@@ -61,6 +61,11 @@ func TestBuildLogQL(t *testing.T) {
 			},
 			want: `{env="prod", level=~"(?i)error"}`,
 		},
+		{
+			name:    "message ID metadata is trimmed and escaped",
+			filters: storage.QueryFilters{Env: "prod", MessageID: ` message"\id `},
+			want:    `{env="prod"} | messageId="message\"\\id"`,
+		},
 	}
 
 	for _, tt := range tests {

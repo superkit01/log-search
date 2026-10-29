@@ -57,7 +57,7 @@ func TestQueryRange_OK_FillsLevel(t *testing.T) {
 		Total: 1,
 	}}
 	r := setupRouter(m)
-	req := postQueryRange(`{"env":"prod","app":"api","levels":["warn","error"],"keyword":"timeout","traceId":"abc123","spanId":" span-1 ","parentSpanId":" parent-1 ","taskId":" task-1 ","start":1,"end":99999,"direction":"FORWARD"}`)
+	req := postQueryRange(`{"env":"prod","app":"api","levels":["warn","error"],"keyword":"timeout","traceId":"abc123","spanId":" span-1 ","parentSpanId":" parent-1 ","taskId":" task-1 ","messageId":" message-1 ","start":1,"end":99999,"direction":"FORWARD"}`)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -77,7 +77,7 @@ func TestQueryRange_OK_FillsLevel(t *testing.T) {
 		Levels:  []string{"warn", "error"},
 		Keyword: "timeout",
 		TraceID: "abc123",
-		SpanID:  "span-1", ParentSpanID: "parent-1", TaskID: "task-1",
+		SpanID:  "span-1", ParentSpanID: "parent-1", TaskID: "task-1", MessageID: "message-1",
 	}
 	if !reflect.DeepEqual(m.lastFilters, wantFilters) {
 		t.Fatalf("filters = %#v, want %#v", m.lastFilters, wantFilters)
@@ -134,7 +134,7 @@ func TestQueryRange_NormalizesTags(t *testing.T) {
 				"app":     "api",
 				"level":   "info",
 				"tid":     "tid-1",
-				"traceId": "tid-1", "spanId": "span-1", "parentSpanId": "parent-1", "taskId": "task-1",
+				"traceId": "tid-1", "spanId": "span-1", "parentSpanId": "parent-1", "taskId": "task-1", "messageId": "message-1",
 				"pod":      "api-123",
 				"trace_id": "legacy",
 			},
@@ -159,7 +159,7 @@ func TestQueryRange_NormalizesTags(t *testing.T) {
 		"app":     "api",
 		"level":   "info",
 		"tid":     "tid-1",
-		"traceId": "tid-1", "spanId": "span-1", "parentSpanId": "parent-1", "taskId": "task-1",
+		"traceId": "tid-1", "spanId": "span-1", "parentSpanId": "parent-1", "taskId": "task-1", "messageId": "message-1",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("labels = %#v, want only %#v", got, want)
@@ -244,6 +244,76 @@ func TestQueryRange_BadCursor(t *testing.T) {
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400", w.Code)
+	}
+}
+
+type pagedMockStorage struct {
+	mockStorage
+	lastCursor string
+}
+
+func (m *pagedMockStorage) QueryRangePage(ctx context.Context, filters storage.QueryFilters, start, end time.Time, limit int, direction storage.Direction, cursor string) (*storage.QueryResult, error) {
+	m.lastCursor = cursor
+	return m.QueryRange(ctx, filters, start, end, limit, direction)
+}
+
+func TestQueryRange_BackendCursorPreservesOriginalRange(t *testing.T) {
+	m := &pagedMockStorage{mockStorage: mockStorage{result: &storage.QueryResult{
+		Lines: []storage.Line{{Time: time.Unix(2, 0), Labels: map[string]string{"sequence": "9007199254740993"}}},
+		Page:  &storage.PageInfo{Continuation: "es1:next"},
+	}}}
+	r := setupRouterLimit(m, 1)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, postQueryRange(`{"env":"prod","start":1,"end":10,"cursor":"es1:previous"}`))
+	if w.Code != 200 {
+		t.Fatalf("status=%d %s", w.Code, w.Body.String())
+	}
+	if m.lastCursor != "es1:previous" || m.lastStart != time.Unix(1, 0) || m.lastEnd != time.Unix(10, 0) {
+		t.Fatalf("cursor/range changed: %+v", m)
+	}
+	var result storage.QueryResult
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.NextCursor != "es1:next" || result.Lines[0].Labels["sequence"] != "9007199254740993" {
+		t.Fatalf("response=%s", w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "Continuation") {
+		t.Fatal("internal page metadata leaked")
+	}
+	// A full last page with no continuation must not fall back to a time cursor.
+	m.result.Page.Continuation = ""
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, postQueryRange(`{"env":"prod","start":1,"end":10}`))
+	json.Unmarshal(w.Body.Bytes(), &result)
+	var last map[string]interface{}
+	json.Unmarshal(w.Body.Bytes(), &last)
+	if _, exists := last["nextCursor"]; exists {
+		t.Fatalf("unexpected cursor: %s", w.Body.String())
+	}
+}
+
+func TestQueryRange_LokiRejectsESCursor(t *testing.T) {
+	w := httptest.NewRecorder()
+	setupRouter(&mockStorage{}).ServeHTTP(w, postQueryRange(`{"env":"prod","start":1,"end":10,"cursor":"es1:other"}`))
+	if w.Code != 400 {
+		t.Fatalf("status=%d", w.Code)
+	}
+}
+
+func TestQueryRange_ESLegacyCursorStaysOnLegacyPagination(t *testing.T) {
+	m := &pagedMockStorage{mockStorage: mockStorage{result: &storage.QueryResult{
+		Lines: []storage.Line{{Time: time.Unix(2, 0)}},
+	}}, lastCursor: "not-called"}
+	w := httptest.NewRecorder()
+	setupRouterLimit(m, 1).ServeHTTP(w, postQueryRange(`{"env":"prod","start":1,"end":10,"cursor":"5000000000"}`))
+	if w.Code != 200 || m.lastCursor != "not-called" || m.lastEnd.UnixNano() != 4999999999 {
+		t.Fatalf("legacy path: %d %+v", w.Code, m)
+	}
+	var result storage.QueryResult
+	json.Unmarshal(w.Body.Bytes(), &result)
+	if result.NextCursor != "2000000000" {
+		t.Fatalf("legacy cursor=%q", result.NextCursor)
 	}
 }
 

@@ -15,6 +15,7 @@ type queryRangeRequest struct {
 	SpanID       string   `json:"spanId"`
 	ParentSpanID string   `json:"parentSpanId"`
 	TaskID       string   `json:"taskId"`
+	MessageID    string   `json:"messageId"`
 	TraceID      string   `json:"traceId"`
 	Start        int64    `json:"start"`
 	End          int64    `json:"end"`
@@ -33,5 +34,6 @@ func (r queryRangeRequest) filters() storage.QueryFilters {
 		SpanID:       strings.TrimSpace(r.SpanID),
 		ParentSpanID: strings.TrimSpace(r.ParentSpanID),
 		TaskID:       strings.TrimSpace(r.TaskID),
+		MessageID:    strings.TrimSpace(r.MessageID),
 	}
 }

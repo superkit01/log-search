@@ -12,6 +12,16 @@ type Client interface {
 	QueryRange(ctx context.Context, filters QueryFilters, start, end time.Time, limit int, direction Direction) (*QueryResult, error)
 }
 
+// CursorClient optionally supports backend-specific stable pagination. The web
+// layer continues to own the public nextCursor response and legacy time cursors.
+type CursorClient interface {
+	QueryRangePage(ctx context.Context, filters QueryFilters, start, end time.Time, limit int, direction Direction, cursor string) (*QueryResult, error)
+}
+
+type PageInfo struct {
+	Continuation string
+}
+
 // QueryFilters 是页面筛选条件的存储无关表示。具体后端自行把它转换为
 // Loki LogQL 或 Elasticsearch DSL。
 type QueryFilters struct {
@@ -23,6 +33,7 @@ type QueryFilters struct {
 	SpanID       string
 	ParentSpanID string
 	TaskID       string
+	MessageID    string
 	TraceID      string
 }
 
@@ -118,9 +129,10 @@ type Line struct {
 
 // QueryResult 是范围查询的聚合结果。
 type QueryResult struct {
-	Lines      []Line `json:"lines"`
-	Total      int    `json:"total"`
-	NextCursor string `json:"nextCursor,omitempty"`
+	Lines      []Line    `json:"lines"`
+	Total      int       `json:"total"`
+	NextCursor string    `json:"nextCursor,omitempty"`
+	Page       *PageInfo `json:"-"`
 }
 
 // Direction 是查询方向。

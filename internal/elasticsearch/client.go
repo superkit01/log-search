@@ -93,6 +93,7 @@ func (c *httpClient) QueryRange(ctx context.Context, filters storage.QueryFilter
 		"size":  limit,
 		"sort": []map[string]interface{}{
 			{"@timestamp": map[string]interface{}{"order": sortOrder(direction)}},
+			{"sequence": map[string]interface{}{"order": sortOrder(direction), "missing": "_last", "unmapped_type": "long"}},
 		},
 	}
 
@@ -120,6 +121,9 @@ func (c *httpClient) search(ctx context.Context, index string, body map[string]i
 	}
 
 	searchURL := fmt.Sprintf("%s/%s/_search?ignore_unavailable=true&allow_no_indices=true", c.baseURL, index)
+	if index == "" {
+		searchURL = c.baseURL + "/_search?allow_partial_search_results=false"
+	}
 	log.Printf("[ES Request] URL=%s body=%s", searchURL, string(data))
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, searchURL, strings.NewReader(string(data)))
@@ -152,7 +156,9 @@ func (c *httpClient) search(ctx context.Context, index string, body map[string]i
 		return &storage.HTTPError{StatusCode: resp.StatusCode, Message: msg}
 	}
 
-	if err := json.Unmarshal(respBody, out); err != nil {
+	decoder := json.NewDecoder(strings.NewReader(string(respBody)))
+	decoder.UseNumber()
+	if err := decoder.Decode(out); err != nil {
 		return fmt.Errorf("es: decode response: %w (body=%s)", err, string(respBody))
 	}
 
@@ -187,6 +193,9 @@ func (c *httpClient) convertResult(result searchResult) (*storage.QueryResult, e
 			if strVal, ok := v.(string); ok {
 				labels[k] = strVal
 			}
+		}
+		if sequence, ok := source["sequence"].(json.Number); ok {
+			labels["sequence"] = sequence.String()
 		}
 
 		if trace, ok := source["traceId"].(string); ok && trace != "" {
@@ -256,7 +265,8 @@ func formatIndexName(pattern string, t time.Time) string {
 
 // ES 搜索响应结构
 type searchResult struct {
-	Hits struct {
+	PITID string `json:"pit_id"`
+	Hits  struct {
 		Total struct {
 			Value int `json:"value"`
 		} `json:"total"`
@@ -264,6 +274,7 @@ type searchResult struct {
 			Source map[string]interface{} `json:"_source"`
 			Index  string                 `json:"_index"`
 			ID     string                 `json:"_id"`
+			Sort   []json.RawMessage      `json:"sort"`
 		} `json:"hits"`
 	} `json:"hits"`
 }

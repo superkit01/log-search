@@ -48,7 +48,7 @@ test("decodeShareState: decodes query params into state", () => {
       direction: "FORWARD",
       keyword: "timeout error",
       traceId: "abc/123",
-      spanId: "", parentSpanId: "", taskId: "",
+      spanId: "", parentSpanId: "", taskId: "", messageId: "",
       start: 1782892800,
       end: 1782979140,
     }
@@ -66,7 +66,7 @@ test("decodeShareState: ignores invalid levels, direction, and timestamps", () =
       direction: "",
       keyword: "",
       traceId: "",
-      spanId: "", parentSpanId: "", taskId: "",
+      spanId: "", parentSpanId: "", taskId: "", messageId: "",
       start: 0,
       end: 0,
     }
@@ -74,14 +74,19 @@ test("decodeShareState: ignores invalid levels, direction, and timestamps", () =
 });
 
  test("share links preserve all correlation filters", () => {
- const state = { traceId: "trace", spanId: " span ", parentSpanId: "parent", taskId: "task&1" };
+ const state = { traceId: "trace", spanId: " span ", parentSpanId: "parent", taskId: "task&1", messageId: " message&1/+ " };
  const decoded = decodeShareState(encodeShareState(state));
  assert.strictEqual(decoded.traceId, "trace");
  assert.strictEqual(decoded.spanId, "span");
  assert.strictEqual(decoded.parentSpanId, "parent");
  assert.strictEqual(decoded.taskId, "task&1");
+ assert.strictEqual(decoded.messageId, "message&1/+");
  });
 
 test("share links preserve namespace", () => {
  assert.strictEqual(decodeShareState(encodeShareState({namespace:"ems"})).namespace, "ems");
+});
+
+test("a message-only share link restores the message filter", () => {
+ assert.strictEqual(decodeShareState("?message_id=message-1").messageId, "message-1");
 });

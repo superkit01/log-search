@@ -48,6 +48,8 @@ The layering is intentional and each boundary matters:
 
 ### Wiring (`cmd/server/main.go`)
 
+**ES pagination extension (sequence sorting):** Elasticsearch additionally implements `storage.CursorClient`. Web requests use `QueryRangePage` with opaque `es1:` cursors that bind the original query/range/direction to a PIT and exact `search_after` values. Sorting is `@timestamp`, `sequence`, `_shard_doc` (same direction); missing sequence is tolerated. Backend pagination metadata is returned only in `QueryResult.Page` (`json:"-"`); the web layer still owns public `NextCursor`. ES cursor requests must not advance start/end. Legacy numeric time cursors and Loki retain the timestamp rules above. PITs renew for 2 minutes per page and are closed at end of results; abandoned searches expire automatically.
+
 Templates and static assets are **embedded** into the binary via `go:embed` (`web/assets.go`, package `assets`, exposing `assets.FS`). `main` mounts them with `web.MountAssets(r, assets.FS)` — which parses `templates/*.html` (template name `index.html`) and serves `static/` at `/static`. Deployment needs only the binary + `config.yaml` — no `web/` directory on disk. (`make run`/`make build` still run from the repo root so the embed source `web/` is present at **build** time.)
 
 ## Conventions

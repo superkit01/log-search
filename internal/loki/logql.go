@@ -37,6 +37,7 @@ func buildLogQL(filters storage.QueryFilters) (string, error) {
 	}
 	for _, field := range []struct{ name, value string }{
 		{"spanId", filters.SpanID}, {"parentSpanId", filters.ParentSpanID}, {"taskId", filters.TaskID},
+		{"messageId", filters.MessageID},
 	} {
 		if value := strings.TrimSpace(field.value); value != "" {
 			parts = append(parts, `| `+field.name+`="`+escapeLogQLValue(value)+`"`)
