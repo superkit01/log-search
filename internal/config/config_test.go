@@ -277,3 +277,27 @@ func TestNamespaceAppsNormalization(t *testing.T) {
 		t.Fatalf("apps = %#v", apps)
 	}
 }
+
+func TestNamespaceEnvs(t *testing.T) {
+	ui := UICfg{
+		Envs: []UIOption{{Value: "legacy"}},
+		Namespaces: []UIOption{
+			{Value: "default", Envs: []UIOption{{Value: " dev ", Label: " 开发 "}}},
+			{Value: "ems", Envs: []UIOption{{Value: "prod"}}},
+			{Value: "old"},
+		},
+	}
+	if err := validateUIOptions(&ui); err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []UIOption{{Value: "dev", Label: "开发"}, {Value: "prod", Label: "prod"}, {Value: "legacy", Label: "legacy"}} {
+		got := ui.Namespaces[i].Envs
+		if len(got) != 1 || got[0].Value != want.Value || got[0].Label != want.Label {
+			t.Fatalf("namespace %d envs = %+v", i, got)
+		}
+	}
+	ui.Namespaces[0].Envs = []UIOption{{Value: " "}}
+	if err := validateUIOptions(&ui); err == nil || !strings.Contains(err.Error(), "ui.namespaces[0]") {
+		t.Fatalf("expected scoped validation error, got %v", err)
+	}
+}

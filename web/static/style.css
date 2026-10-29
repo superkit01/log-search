@@ -1,4 +1,11 @@
 * { box-sizing: border-box; }
+.query-loading { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: rgba(0, 0, 0, 0.22); cursor: progress; }
+.query-loading[hidden] { display: none; }
+.query-loading-card { display: flex; align-items: center; gap: 14px; padding: 24px 32px; border: 1px solid #444; border-radius: 12px; background: #252525; color: #eee; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25); font-size: 14px; }
+.query-loading-spinner { width: 28px; height: 28px; border: 3px solid rgba(58, 123, 213, 0.25); border-top-color: #3a7bd5; border-radius: 50%; animation: query-loading-spin 0.8s linear infinite; }
+body.light-theme .query-loading-card { background: #fff; color: #333; border-color: #ddd; }
+@keyframes query-loading-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .query-loading-spinner { animation: none; } }
 body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #1e1e1e; color: #ddd; transition: background 0.3s, color 0.3s; color-scheme: dark; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 
 /* 亮色主题 */
@@ -311,9 +318,10 @@ body.light-theme .line .txt-wrapper.collapsed .txt-preview::after {
   color: #fff;
 }
 
-/* 输入框固定宽度:应用/时间 190px;链路/关键词 500px */
+/* 输入框固定宽度:应用/时间 190px;关联 ID 240px;关键词 500px */
 #app-select { width: 190px; }
-#trace-id, #span-id, #parent-span-id, #task-id, #message-id, #keyword { width: 500px; }
+#trace-id, #span-id, #parent-span-id, #task-id, #message-id { width: 240px; }
+#keyword { width: 500px; }
 
 header { gap: 20px; flex-wrap: wrap; }
 .namespace-tabs { margin-right: auto; flex-wrap: wrap; }

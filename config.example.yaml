@@ -29,11 +29,16 @@ ui:
   namespaces:
     - label: 默认平台
       value: default
-      apps: []
+      envs:
+        - label: 开发
+          value: dev
+      apps:
+        - app-x
+        - app-y
       description: 默认业务空间的应用日志
     - label: EMS
       value: ems
+      envs:
+        - label: 开发
+          value: dev
       description: EMS 平台应用日志
-  envs:
-    - label: 开发
-      value: dev

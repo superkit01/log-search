@@ -57,10 +57,11 @@ type UICfg struct {
 }
 
 type UIOption struct {
-	Apps        []string `yaml:"apps"`
-	Description string   `yaml:"description"`
-	Label       string   `yaml:"label"`
-	Value       string   `yaml:"value"`
+	Envs        []UIOption `yaml:"envs"`
+	Apps        []string   `yaml:"apps"`
+	Description string     `yaml:"description"`
+	Label       string     `yaml:"label"`
+	Value       string     `yaml:"value"`
 }
 
 func DefaultUICfg() UICfg {
@@ -243,6 +244,17 @@ func validateUIOptions(ui *UICfg) error {
 		}
 	}
 	ui.Apps = compactStrings(ui.Apps)
+	for i := range ui.Namespaces {
+		option := &ui.Namespaces[i]
+		if len(option.Envs) == 0 {
+			option.Envs = append([]UIOption(nil), ui.Envs...)
+		}
+		scoped := UICfg{Envs: option.Envs}
+		if err := validateUIOptions(&scoped); err != nil {
+			return fmt.Errorf("ui.namespaces[%d]: %w", i, err)
+		}
+		option.Envs = scoped.Envs
+	}
 	return nil
 }
 

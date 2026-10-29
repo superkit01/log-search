@@ -51,6 +51,11 @@ func (c *httpClient) QueryRangePage(ctx context.Context, filters storage.QueryFi
 			ID string `json:"id"`
 		}
 		err := c.pitRequest(ctx, http.MethodPost, "/"+index+"/_pit?keep_alive="+pitKeepAlive+"&ignore_unavailable=true", nil, &opened)
+		// ES 7.16 can return an NPE when ignore_unavailable removes every target.
+		// Retry strictly to confirm index_not_found rather than hiding a real 500.
+		if isEmptyPITFailure(err) {
+			err = c.pitRequest(ctx, http.MethodPost, "/"+index+"/_pit?keep_alive="+pitKeepAlive+"&ignore_unavailable=false", nil, &opened)
+		}
 		if err != nil {
 			var httpErr *storage.HTTPError
 			if errors.As(err, &httpErr) && httpErr.StatusCode == 404 && strings.Contains(httpErr.Message, "index_not_found_exception") {
@@ -114,6 +119,22 @@ func (c *httpClient) QueryRangePage(ctx context.Context, filters storage.QueryFi
 
 func badCursor() error {
 	return &storage.HTTPError{StatusCode: http.StatusBadRequest, Message: "分页游标无效或查询条件已改变，请重新查询"}
+}
+
+func isEmptyPITFailure(err error) bool {
+	var httpErr *storage.HTTPError
+	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusInternalServerError {
+		return false
+	}
+	var response struct {
+		Error struct {
+			Type   string `json:"type"`
+			Reason string `json:"reason"`
+		} `json:"error"`
+	}
+	return json.Unmarshal([]byte(httpErr.Message), &response) == nil &&
+		response.Error.Type == "null_pointer_exception" &&
+		response.Error.Reason == "Point in time parameter must be not null"
 }
 
 func (c *httpClient) closePIT(ctx context.Context, id string) {

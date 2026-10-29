@@ -15,7 +15,7 @@
 
 - **可切换存储后端**:`storage.type` 支持 `loki` 或 `es`;Web 层统一接收页面 JSON 筛选条件,具体后端客户端自行组织 Loki LogQL 或 ES DSL 查询。
 - **查询条件**:环境(来自配置)、级别(DEBUG/INFO/WARN/ERROR,多选)、方向(倒序/正序)选项卡;应用下拉、链路 id、关键词文本框——后三者各带一键清除图标。
-- **配置化选项**:环境选项和应用下拉从 `config.yaml` 的 `ui.envs` / `ui.apps` 读取。
+- **配置化选项**:环境选项和应用下拉从 `config.yaml` 的 `ui.namespaces[].envs` / `ui.namespaces[].apps` 读取，随平台切换。
 - **后端生成查询**:浏览器向 `/api/query_range` 发送 JSON 筛选条件;Web 层负责校验、设置 limit、处理游标分页。Loki 后端根据筛选条件构造 LogQL;ES 后端根据同一组 JSON 字段直接构造 ES DSL。
 - **链路筛选**:`tid` 在 Loki 中按 structured metadata 查询,LogQL 形如 `| tid="..."`,不是 stream label selector;ES 后端按文档字段 `tid.keyword` 查询。
 - **关键词查询**:关键词默认匹配日志正文;支持 `a && b` 表示同时包含两个条件,支持 `a || b` 表示包含任意一个条件。Loki 后端会生成多个 line filter 或正则 line filter;ES 后端会对 `message` 字段生成 `match_phrase` 查询。
@@ -86,7 +86,7 @@ ES 每条日志文档需要使用顶层字段承载同一组信息:
 - `env=test` → 查询 `logs-test-*` (包含 `logs-test-2026.07.04`、`logs-test-2026.07.05` 等所有历史索引)
 - `env=prod` → 查询 `logs-prod-*`
 
-页面配置里的 `ui.envs` / `ui.apps` 必须和 Loki labels 或 ES 文档中的实际 `env` / `app` 值一致;否则选择对应筛选项时会正常返回空结果。
+页面配置里的 `ui.namespaces[].envs` / `ui.namespaces[].apps` 必须和 Loki labels 或 ES 文档中的实际 `env` / `app` 值一致;否则选择对应筛选项时会正常返回空结果。
 
 ## 测试数据
 
@@ -191,6 +191,8 @@ ui:
 `storage.elasticsearch.index` 设置为 `app-log-{namespace}-{env}-{yyyyMMdd}`。切换平台会立即重新查询；新增平台只需添加配置项并重启应用。
 
 `ui.namespaces[].description` 为可选说明，鼠标悬停平台按钮时显示。
+
+环境配置在 `ui.namespaces[].envs` 下，每项包含 `label` 和 `value`。切换平台时仅展示该平台的环境，保留仍有效的环境选择，否则选择第一个环境。保存的筛选项和分享链接也按此规则恢复。未配置平台环境时，兼容旧的 `ui.envs`，再回退到“演示”/`demo`。
 
 应用按平台配置在 `ui.namespaces[].apps` 下，例如：
 

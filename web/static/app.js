@@ -11,6 +11,18 @@ function refreshNamespaceApps() {
   syncClearButtons();
 }
 let chart;
+function refreshNamespaceEnvs(preferred) {
+  const namespace = activeTabValue("namespace-tabs");
+  const previous = preferred === undefined ? activeTabValue("env-tabs") : preferred;
+  const tabs = Array.from(document.querySelectorAll("#env-tabs .env-tab"));
+  tabs.forEach(tab => {
+    tab.hidden = !!$("namespace-tabs") && tab.dataset.namespace !== namespace;
+    tab.classList.remove("active");
+  });
+  const visible = tabs.filter(tab => !tab.hidden);
+  const selected = visible.find(tab => tab.dataset.value === previous) || visible[0];
+  if (selected) selected.classList.add("active");
+}
 let currentLines = [];
 let nextCursor = "";
 let lastQueryPayload = null;
@@ -54,15 +66,34 @@ function toUnix(inputVal) {
   return Math.floor(new Date(inputVal).getTime() / 1000);
 }
 
+let pendingQueries = 0;
+
+function updateQueryLoading() {
+  $("query-loading").hidden = pendingQueries === 0;
+  $("scroll-area").setAttribute("aria-busy", String(pendingQueries > 0));
+}
+
 async function apiJSON(path, payload) {
-  const r = await fetch(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const j = await r.json();
-  if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
-  return j;
+  const isQuery = path === "/api/query_range";
+  if (isQuery) {
+    pendingQueries++;
+    updateQueryLoading();
+  }
+  try {
+    const r = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+    return j;
+  } finally {
+    if (isQuery) {
+      pendingQueries--;
+      updateQueryLoading();
+    }
+  }
 }
 
 function showError(msg) { const b = $("error-bar"); b.classList.remove("info"); b.textContent = msg; b.hidden = false; }
@@ -101,9 +132,8 @@ function loadFilters() {
   const selectedNamespace = namespaceTabs.find(tab => tab.dataset.value === namespace) || namespaceTabs[0];
   setActiveTabValue("namespace-tabs", selectedNamespace ? selectedNamespace.dataset.value : "");
   refreshNamespaceApps();
-  const defaultEnvTab = document.querySelector("#env-tabs .env-tab");
   setActiveLevels(levels);
-  setActiveTabValue("env-tabs", env || (defaultEnvTab ? defaultEnvTab.dataset.value : ""));
+  refreshNamespaceEnvs(env);
   setActiveTabValue("direction-tabs", direction || "BACKWARD");
 }
 
@@ -146,6 +176,7 @@ document.querySelectorAll("#namespace-tabs .env-tab").forEach(tab => {
  tab.addEventListener("click", () => {
  setActiveTabValue("namespace-tabs", tab.dataset.value);
  refreshNamespaceApps();
+ refreshNamespaceEnvs();
  saveFilters();
  search();
  });
@@ -276,7 +307,7 @@ function applyShareState(state) {
  $("parent-span-id").value = state.parentSpanId || "";
  $("task-id").value = state.taskId || "";
   $("message-id").value = state.messageId || "";
-  setActiveTabValue("env-tabs", state.env || "");
+  refreshNamespaceEnvs(state.env);
   setActiveLevels(state.levels || []);
   if (state.direction) setActiveTabValue("direction-tabs", state.direction);
 }

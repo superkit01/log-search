@@ -102,3 +102,24 @@ func TestIndexNamespaceApps(t *testing.T) {
 		t.Error("global apps should not appear in scoped list")
 	}
 }
+
+func TestIndexNamespaceEnvs(t *testing.T) {
+	r := gin.New()
+	if err := MountAssets(r, assets.FS); err != nil {
+		t.Fatal(err)
+	}
+	New(&mockStorage{}, 100, UIOptions{Namespaces: []Choice{
+		{Value: "default", Envs: []Choice{{Value: "dev", Label: "开发"}}},
+		{Value: "ems", Envs: []Choice{{Value: "prod", Label: "生产"}}},
+	}, Envs: []Choice{{Value: "legacy"}}}).Register(r)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+	for _, option := range []string{`data-namespace="default" data-value="dev"`, `data-namespace="ems" data-value="prod"`} {
+		if !strings.Contains(w.Body.String(), option) {
+			t.Errorf("missing %s", option)
+		}
+	}
+	if strings.Contains(w.Body.String(), `data-value="legacy"`) {
+		t.Error("global envs should not appear when namespace envs are configured")
+	}
+}

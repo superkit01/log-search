@@ -57,7 +57,11 @@
           <button class="env-tab" data-value="FORWARD">正序</button>
         </div>
         <div class="env-tabs" id="env-tabs">
-          {{range .envs}}<button class="env-tab" data-value="{{.Value}}">{{.Label}}</button>{{end}}
+          {{if .namespaces}}
+          {{range .namespaces}}{{$namespace := .Value}}{{range .Envs}}<button type="button" class="env-tab" data-namespace="{{$namespace}}" data-value="{{.Value}}">{{.Label}}</button>{{end}}{{end}}
+          {{else}}
+          {{range .envs}}<button type="button" class="env-tab" data-value="{{.Value}}">{{.Label}}</button>{{end}}
+          {{end}}
         </div>
       </div>
       <div class="row query-row">
@@ -112,10 +116,10 @@
             </button>
           </span>
         </label>
-        <label><span class="lbl">父级SpanId</span>
+        <label><span class="lbl">ParentSpanId</span>
           <span class="clear-field">
-            <input type="text" id="parent-span-id" placeholder="父级SpanId">
-            <button type="button" id="parent-span-id-clear" class="clear-icon" title="清除" aria-label="清除父级SpanId" hidden>
+            <input type="text" id="parent-span-id" placeholder="ParentSpanId">
+            <button type="button" id="parent-span-id-clear" class="clear-icon" title="清除" aria-label="清除ParentSpanId" hidden>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <line x1="6" y1="6" x2="18" y2="18"></line>
                 <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -166,6 +170,12 @@
       <section id="results" class="results"></section>
     </div>
   </main>
+  <div id="query-loading" class="query-loading" role="status" aria-live="polite" hidden>
+    <div class="query-loading-card">
+      <span class="query-loading-spinner" aria-hidden="true"></span>
+      <span>正在查询日志…</span>
+    </div>
+  </div>
   <script src="/static/levels.js"></script>
   <script src="/static/share.js"></script>
   <script src="/static/trace.js"></script>

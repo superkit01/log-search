@@ -34,6 +34,11 @@ func New(client storage.Client, defaultLimit int, ui ...UIOptions) *Handler {
 			opts.Envs = config.DefaultUICfg().Envs
 		}
 	}
+	for i := range opts.Namespaces {
+		if len(opts.Namespaces[i].Envs) == 0 {
+			opts.Namespaces[i].Envs = opts.Envs
+		}
+	}
 	return &Handler{Client: client, Limit: defaultLimit, UI: opts}
 }
 

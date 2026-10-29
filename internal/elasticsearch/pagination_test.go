@@ -15,6 +15,63 @@ import (
 	"log-search/internal/storage"
 )
 
+func TestPITMissingIndicesCompatibility(t *testing.T) {
+	const npe = `{"error":{"type":"null_pointer_exception","reason":"Point in time parameter must be not null"},"status":500}`
+	for _, tc := range []struct {
+		name          string
+		initialStatus int
+		initialBody   string
+		strictStatus  int
+		strictBody    string
+		wantStatus    int
+		wantCalls     int
+	}{
+		{"missing", 500, npe, 404, `{"error":{"type":"index_not_found_exception"}}`, 0, 2},
+		{"other failure", 500, `{"error":{"type":"exception","reason":"unavailable"}}`, 0, "", 500, 1},
+		{"strict failure", 500, npe, 503, `{"error":{"type":"unavailable_shards_exception"}}`, 503, 2},
+		{"strict not found unrelated", 500, npe, 404, `{"error":{"type":"resource_not_found_exception"}}`, 404, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				if r.URL.Path != "/logs-20261028,logs-20261029/_pit" {
+					t.Errorf("unexpected path: %s", r.URL.Path)
+				}
+				if calls == 1 {
+					if r.URL.Query().Get("ignore_unavailable") != "true" {
+						t.Error("first request must tolerate partially missing indices")
+					}
+					w.WriteHeader(tc.initialStatus)
+					fmt.Fprint(w, tc.initialBody)
+				} else {
+					if r.URL.Query().Get("ignore_unavailable") != "false" {
+						t.Error("retry must confirm missing indices")
+					}
+					w.WriteHeader(tc.strictStatus)
+					fmt.Fprint(w, tc.strictBody)
+				}
+			}))
+			defer server.Close()
+			client := NewHTTPClient(server.URL, "logs-20261028,logs-20261029", time.Second).(storage.CursorClient)
+			res, err := client.QueryRangePage(context.Background(), storage.QueryFilters{}, time.Unix(1, 0), time.Unix(2, 0), 1000, storage.Backward, "")
+			if tc.wantStatus == 0 {
+				if err != nil || res == nil || res.Lines == nil || len(res.Lines) != 0 || res.Page == nil || res.Page.Continuation != "" {
+					t.Fatalf("expected empty result: %+v, %v", res, err)
+				}
+			} else {
+				httpErr, ok := err.(*storage.HTTPError)
+				if !ok || httpErr.StatusCode != tc.wantStatus {
+					t.Fatalf("expected status %d: %v", tc.wantStatus, err)
+				}
+			}
+			if calls != tc.wantCalls {
+				t.Fatalf("requests = %d, want %d", calls, tc.wantCalls)
+			}
+		})
+	}
+}
+
 func TestPITPaginationKeepsSameTimestampHitsAndExactLongValues(t *testing.T) {
 	for _, direction := range []storage.Direction{storage.Forward, storage.Backward} {
 		t.Run(string(direction), func(t *testing.T) {
