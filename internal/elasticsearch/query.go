@@ -28,14 +28,20 @@ func buildESQueryWithFields(filters storage.QueryFilters, fields FieldMapping) m
 		mustList = append(mustList, term(fields.App, app))
 	}
 	if levels := filters.NormalizedLevels(); len(levels) > 0 {
-		if fields.UppercaseLevels {
-			for i := range levels {
-				levels[i] = strings.ToUpper(levels[i])
+		// Exact terms are case-sensitive. Include both common representations:
+		// keyword fields can retain uppercase while analyzed fields use lowercase.
+		values := make([]string, 0, len(levels)*2)
+		for _, level := range levels {
+			upper := strings.ToUpper(level)
+			if fields.UppercaseLevels {
+				values = append(values, upper, level)
+			} else {
+				values = append(values, level, upper)
 			}
 		}
 		mustList = append(mustList, map[string]interface{}{
 			"terms": map[string]interface{}{
-				fields.Level: levels,
+				fields.Level: values,
 			},
 		})
 	}

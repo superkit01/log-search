@@ -262,6 +262,28 @@ body.light-theme .line .txt-wrapper.collapsed .txt-preview::after {
   margin-left: 0;
 }
 
+/* 两侧等宽，使排序按钮的位置不受当前平台环境数量影响。 */
+.controls .filter-tabs-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+}
+.filter-tabs-row > .env-tabs {
+  margin-left: 0;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.filter-tabs-row .level-tabs { justify-self: start; }
+.filter-tabs-row .direction-tabs { justify-self: center; }
+.filter-tabs-row #env-tabs { justify-self: end; }
+.filter-tabs-row .env-tab { flex-shrink: 0; white-space: nowrap; }
+
+@media (max-width: 760px) {
+  .controls .filter-tabs-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .filter-tabs-row #env-tabs { grid-column: 1 / -1; justify-self: start; }
+}
+
 .env-tab {
   background: transparent;
   color: #aaa;

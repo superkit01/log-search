@@ -457,13 +457,11 @@ function renderResults(allLines, pageLines, append) {
     // 添加 level 标签
     tags.appendChild(makeCopyableTag("level", l.level || "info", "tag-level"));
 
-    // 添加其他标签：按出现顺序从配色清单(TAG_PALETTE)依次取色,兼容不同部署的标签 key
+    // 添加其他标签：按 key 固定取色，不受标签顺序和缺失字段影响。
     if (l.labels) {
-      let idx = 0;
       Object.entries(l.labels).forEach(([key, value]) => {
         if (key !== "app" && key !== "level" && !(key === "tid" && l.labels.traceId)) {
-          tags.appendChild(makeCopyableTag(key, value, TAG_PALETTE[idx % TAG_PALETTE.length], l));
-          idx++;
+          tags.appendChild(makeCopyableTag(key, value, tagColorClass(key), l));
         }
       });
     }
@@ -594,9 +592,16 @@ async function copyText(text, target) {
   return true;
 }
 
-// 标签配色清单:渲染"其他标签"时按出现位置依次取色、循环使用。
-// 不按 key 匹配——不同系统部署的标签 key 各不相同,按位置上色可保证每个标签都有颜色且彼此区分。
+// 使用稳定的 key 哈希选择颜色，跨日志行、分页和刷新保持一致。
 const TAG_PALETTE = ["tag-c0", "tag-c1", "tag-c2", "tag-c3", "tag-c4", "tag-c5", "tag-c6"];
+
+function tagColorClass(key) {
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) {
+    hash = (Math.imul(hash, 31) + key.charCodeAt(i)) >>> 0;
+  }
+  return TAG_PALETTE[hash % TAG_PALETTE.length];
+}
 
 function renderChart(lines) {
   const colors = { error: "#ff6b6b", warn: "#ffd166", info: "#69c0ff", debug: "#888" };

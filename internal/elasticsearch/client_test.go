@@ -29,7 +29,7 @@ func TestLogstashQueryAndConversion(t *testing.T) {
 			t.Error(err)
 		}
 		encoded, _ := json.Marshal(body)
-		for _, fragment := range []string{`"env":"dev"`, `"app.keyword":"gateway"`, `"level":["INFO"]`, `"traceId":"abc"`, `"spanId":"span"`, `"parentSpanId":"parent"`, `"taskId":"task"`, `"messageId":"message"`} {
+		for _, fragment := range []string{`"env":"dev"`, `"app.keyword":"gateway"`, `"level":["INFO","info"]`, `"traceId":"abc"`, `"spanId":"span"`, `"parentSpanId":"parent"`, `"taskId":"task"`, `"messageId":"message"`} {
 			if !strings.Contains(string(encoded), fragment) {
 				t.Errorf("missing %s in %s", fragment, encoded)
 			}
