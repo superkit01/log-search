@@ -2,9 +2,9 @@ const test = require("node:test");
 const assert = require("node:assert");
 const { traceDrilldownState } = require("./static/trace.js");
 
-test("traceDrilldownState: builds a 15 minute window around the log line", () => {
+test("traceDrilldownState: preserves the current query time range", () => {
   const got = traceDrilldownState(
-    { env: "test", app: "", direction: "BACKWARD", spanId: "span", parentSpanId: "parent", taskId: "task" },
+    { env: "test", app: "", direction: "BACKWARD", spanId: "span", parentSpanId: "parent", taskId: "task", start: 1782950400, end: 1783036799 },
     {
       ts: "2026-07-02T09:13:16.000Z",
       labels: { app: "alert-service" },
@@ -20,14 +20,21 @@ test("traceDrilldownState: builds a 15 minute window around the log line", () =>
     direction: "BACKWARD",
     keyword: "",
     traceId: "TID:abc",
-    start: 1782982696,
-    end: 1782984496,
+    start: 1782950400,
+    end: 1783036799,
   });
 });
 
-test("traceDrilldownState: returns null when timestamp or trace id is missing", () => {
-  assert.strictEqual(traceDrilldownState({}, { ts: "bad", labels: {} }, "TID:abc"), null);
+test("traceDrilldownState: returns null when current state or trace id is missing", () => {
+  assert.strictEqual(traceDrilldownState(null, { labels: {} }, "TID:abc"), null);
   assert.strictEqual(traceDrilldownState({}, { ts: "2026-07-02T09:13:16.000Z", labels: {} }, ""), null);
+});
+
+test("traceDrilldownState: does not require a log timestamp to retain the range", () => {
+  const got = traceDrilldownState({ start: 100, end: 200 }, { labels: {} }, " trace ");
+  assert.strictEqual(got.start, 100);
+  assert.strictEqual(got.end, 200);
+  assert.strictEqual(got.traceId, "trace");
 });
 
 test("trace drilldown retains namespace", () => {

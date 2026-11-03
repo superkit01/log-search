@@ -25,7 +25,13 @@ func TestBuildESQueryUsesStructuredFilters(t *testing.T) {
 		map[string]interface{}{"terms": map[string]interface{}{"level": []string{"WARN", "warn", "ERROR", "error"}}},
 		map[string]interface{}{"match_phrase": map[string]interface{}{"message": "timeout"}},
 		map[string]interface{}{"term": map[string]interface{}{"traceId": "tid-0001"}},
-		map[string]interface{}{"term": map[string]interface{}{"messageId": "message-0001"}},
+		map[string]interface{}{"bool": map[string]interface{}{
+			"should": []interface{}{
+				map[string]interface{}{"term": map[string]interface{}{"messageId": "message-0001"}},
+				map[string]interface{}{"term": map[string]interface{}{"messageId.keyword": "message-0001"}},
+			},
+			"minimum_should_match": 1,
+		}},
 	}
 	if !reflect.DeepEqual(must, want) {
 		t.Fatalf("must = %#v, want %#v", must, want)
@@ -42,6 +48,30 @@ func TestBuildESQueryIgnoresInvalidLevels(t *testing.T) {
 	want := []interface{}{
 		map[string]interface{}{"term": map[string]interface{}{"env": "test"}},
 		map[string]interface{}{"terms": map[string]interface{}{"level": []string{"INFO", "info", "ERROR", "error"}}},
+	}
+	if !reflect.DeepEqual(must, want) {
+		t.Fatalf("must = %#v, want %#v", must, want)
+	}
+}
+
+func TestBuildESQueryExactIDsAcrossMappings(t *testing.T) {
+	got := buildESQuery(storage.QueryFilters{TaskID: " task-1 ", MessageID: " message-1 "})
+	must := got["bool"].(map[string]interface{})["must"].([]interface{})
+	want := []interface{}{
+		map[string]interface{}{"bool": map[string]interface{}{
+			"should": []interface{}{
+				map[string]interface{}{"term": map[string]interface{}{"taskId": "task-1"}},
+				map[string]interface{}{"term": map[string]interface{}{"taskId.keyword": "task-1"}},
+			},
+			"minimum_should_match": 1,
+		}},
+		map[string]interface{}{"bool": map[string]interface{}{
+			"should": []interface{}{
+				map[string]interface{}{"term": map[string]interface{}{"messageId": "message-1"}},
+				map[string]interface{}{"term": map[string]interface{}{"messageId.keyword": "message-1"}},
+			},
+			"minimum_should_match": 1,
+		}},
 	}
 	if !reflect.DeepEqual(must, want) {
 		t.Fatalf("must = %#v, want %#v", must, want)

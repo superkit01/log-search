@@ -71,11 +71,26 @@ func buildESQueryWithFields(filters storage.QueryFilters, fields FieldMapping) m
 		{"messageId", filters.MessageID},
 	} {
 		if value := strings.TrimSpace(field.value); value != "" {
-			mustList = append(mustList, term(field.name, value))
+			if field.name == "taskId" || field.name == "messageId" {
+				// Older indices use keyword directly; newer dynamic mappings
+				// expose exact IDs through a keyword subfield.
+				mustList = append(mustList, exactID(field.name, value))
+			} else {
+				mustList = append(mustList, term(field.name, value))
+			}
 		}
 	}
 	query["bool"].(map[string]interface{})["must"] = mustList
 	return query
+}
+
+func exactID(field, value string) map[string]interface{} {
+	return map[string]interface{}{
+		"bool": map[string]interface{}{
+			"should":               []interface{}{term(field, value), term(field+".keyword", value)},
+			"minimum_should_match": 1,
+		},
+	}
 }
 
 func matchMessage(value string) map[string]interface{} {
