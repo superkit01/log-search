@@ -4,12 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>日志查询 - Log Search</title>
+  <link rel="icon" href="/static/favicon.ico" sizes="16x16 32x32 48x48 256x256">
+  <link rel="icon" type="image/png" sizes="256x256" href="/static/logo-ls.png">
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/chart.umd.min.js"></script>
 </head>
 <body>
   <header>
-    <h1>日志查询</h1>
+    <h1 class="brand"><img class="brand-logo" src="/static/logo-ls.png" width="32" height="32" alt="">日志查询</h1>
     {{if .namespaces}}
     <div class="env-tabs namespace-tabs" id="namespace-tabs" aria-label="平台切换">
       {{range .namespaces}}<button type="button" class="env-tab" data-value="{{.Value}}"{{if .Description}} title="{{.Description}}"{{end}}>{{.Label}}</button>{{end}}

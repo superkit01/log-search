@@ -396,3 +396,6 @@ body.light-theme #search { background: linear-gradient(135deg, #527ee8, #6366d9)
 .settings > summary:focus-visible { outline: 2px solid #81a7ff; outline-offset: 3px; }
 body.light-theme .settings-panel { background: #fff; color: #334155; border-color: #dce5f1; box-shadow: 0 12px 36px #233b5e20; }
 body.light-theme .settings[open] > summary { background: #e7edf6; color: #416bd1; }
+
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-logo { width: 2rem; height: 2rem; border-radius: 7px; flex-shrink: 0; }

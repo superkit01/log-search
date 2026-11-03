@@ -658,7 +658,8 @@ function renderChart(lines) {
     label: lvl,
     stack: "s",
     backgroundColor: colors[lvl],
-    data: keys.map((k) => buckets[k][lvl]),
+    minBarLength: 3,
+    data: keys.map((k) => buckets[k][lvl] || null),
   }));
   if (chart) chart.destroy();
   chart = new Chart($("chart"), {
@@ -667,7 +668,14 @@ function renderChart(lines) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { labels: { color: "#ddd" } } },
+      plugins: {
+        title: { display: true, text: `已加载日志按分钟统计（${lines.length} 条，非全量）`, color: "#a6b5cb" },
+        legend: { labels: { color: "#ddd" } },
+        tooltip: {
+          filter: (item) => item.raw > 0,
+          callbacks: { footer: (items) => `该分钟合计：${items.reduce((sum, item) => sum + item.raw, 0)} 条` },
+        },
+      },
       scales: {
         x: { stacked: true, ticks: { color: "#999" } },
         y: { stacked: true, beginAtZero: true, ticks: { color: "#999" } },
