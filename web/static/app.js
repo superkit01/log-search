@@ -28,6 +28,21 @@ let nextCursor = "";
 let lastQueryPayload = null;
 let isLoadingMore = false;
 const FILTERS_KEY = "log-search:filters"; // localStorage 键:存 {env, levels, direction}
+const FONT_SIZE_KEY = "log-search:font-size";
+function applyFontSize(value) {
+  const size = [90, 100, 110, 120, 130, 150].includes(Number(value)) ? Number(value) : 100;
+  document.documentElement.style.fontSize = `${16 * size / 100}px`;
+  $("font-size").value = String(size);
+  Chart.defaults.font.size = 12 * size / 100;
+  if (chart) chart.update("none");
+}
+let savedFontSize;
+try { savedFontSize = localStorage.getItem(FONT_SIZE_KEY); } catch (_) {}
+applyFontSize(savedFontSize);
+$("font-size").addEventListener("change", (event) => {
+  applyFontSize(event.target.value);
+  try { localStorage.setItem(FONT_SIZE_KEY, event.target.value); } catch (_) {}
+});
 const THEME_KEY = "log-search:theme"; // localStorage 键:存主题
 const DEFAULT_LEVELS = LEVEL_ORDER.slice();
 const CHART_LEVELS = LEVEL_ORDER.slice().reverse();
@@ -41,6 +56,8 @@ function toggleTheme() {
 
 function updateThemeIcon() {
   const isLight = document.body.classList.contains("light-theme");
+  $("theme-label").textContent = isLight ? "浅色" : "深色";
+  $("theme-toggle").setAttribute("aria-label", isLight ? "切换为深色主题" : "切换为浅色主题");
   document.querySelector(".theme-icon-dark").style.display = isLight ? "none" : "block";
   document.querySelector(".theme-icon-light").style.display = isLight ? "block" : "none";
 }
@@ -54,6 +71,15 @@ function loadTheme() {
 }
 
 $("theme-toggle").addEventListener("click", toggleTheme);
+document.addEventListener("click", (event) => {
+  if (!$("settings").contains(event.target)) $("settings").open = false;
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && $("settings").open) {
+    $("settings").open = false;
+    $("settings").querySelector("summary").focus();
+  }
+});
 
 function toLocalInput(ts) {
   const d = new Date(ts * 1000);
@@ -219,6 +245,15 @@ document.querySelectorAll(".time-shortcut").forEach((btn) => {
   btn.addEventListener("click", () => setQuickRange(btn.dataset.range));
 });
 
+$("span-filters-toggle").addEventListener("click", () => {
+  const button = $("span-filters-toggle");
+  const expanded = button.getAttribute("aria-expanded") !== "true";
+  $("span-filters-row").hidden = !expanded;
+  button.setAttribute("aria-expanded", String(expanded));
+  const label = expanded ? "收起 Span 筛选" : "展开 Span 筛选";
+  button.setAttribute("aria-label", label);
+  button.title = label;
+});
 // 带清除图标的字段:有值时显示图标,点击清空并聚焦。
 // select 用 change 事件;文本输入用 input 事件,随输入实时显隐。
 const clearSyncers = [];
