@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert");
-const { shouldSubmitInputEnter } = require("./static/keyboard.js");
+const { shouldSubmitInputEnter } = require("../static/js/keyboard.js");
 
 test("shouldSubmitInputEnter: normal input enter submits", () => {
   assert.strictEqual(

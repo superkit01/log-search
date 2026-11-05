@@ -113,7 +113,7 @@ storage:
   type: loki
   loki:
     url: "http://x:3100"
-    default_limit: 5001
+    default_limit: 1001
 `)
 	if _, err := Load(p); err == nil {
 		t.Fatal("expected error for default_limit above max, got nil")

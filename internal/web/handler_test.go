@@ -45,6 +45,49 @@ func setupRouterLimit(m storage.Client, limit int) *gin.Engine {
 	return r
 }
 
+func TestQueryRangeRequestLimit(t *testing.T) {
+	for _, tc := range []struct {
+		name, field, cursor   string
+		wantStatus, wantLimit int
+		wantNext              bool
+	}{
+		{"default", "", "", 200, 300, false},
+		{"override", `,"limit":1`, "", 200, 1, true},
+		{"maximum", `,"limit":1000`, "", 200, 1000, false},
+		{"timestamp page", `,"limit":1`, `,"cursor":"180000000000"`, 200, 1, true},
+		{"zero", `,"limit":0`, "", 400, 0, false},
+		{"negative", `,"limit":-1`, "", 400, 0, false},
+		{"too large", `,"limit":1001`, "", 400, 0, false},
+		{"fraction", `,"limit":1.5`, "", 400, 0, false},
+		{"string", `,"limit":"10"`, "", 400, 0, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &mockStorage{result: &storage.QueryResult{Lines: []storage.Line{{Time: time.Unix(150, 0)}}, Total: 1}}
+			w := httptest.NewRecorder()
+			setupRouterLimit(m, 300).ServeHTTP(w, postQueryRange(`{"env":"test","start":100,"end":200`+tc.field+tc.cursor+`}`))
+			if w.Code != tc.wantStatus || m.lastLimit != tc.wantLimit {
+				t.Fatalf("status=%d limit=%d", w.Code, m.lastLimit)
+			}
+			if tc.wantStatus == 200 {
+				var result storage.QueryResult
+				_ = json.Unmarshal(w.Body.Bytes(), &result)
+				if (result.NextCursor != "") != tc.wantNext {
+					t.Fatalf("incorrect pagination cursor %q", result.NextCursor)
+				}
+			}
+		})
+	}
+}
+
+func TestQueryRangeRequestLimitWithBackendCursor(t *testing.T) {
+	m := &pagedMockStorage{mockStorage: mockStorage{result: &storage.QueryResult{Page: &storage.PageInfo{Continuation: "es1:next"}}}}
+	w := httptest.NewRecorder()
+	setupRouterLimit(m, 300).ServeHTTP(w, postQueryRange(`{"env":"test","start":100,"end":200,"limit":50,"cursor":"es1:previous"}`))
+	if w.Code != 200 || m.lastLimit != 50 || m.lastCursor != "es1:previous" || m.lastStart.Unix() != 100 || m.lastEnd.Unix() != 200 {
+		t.Fatalf("backend cursor or limit changed: status=%d request=%+v", w.Code, m)
+	}
+}
+
 func postQueryRange(body string) *http.Request {
 	req := httptest.NewRequest(http.MethodPost, "/api/query_range", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")

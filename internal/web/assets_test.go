@@ -12,7 +12,7 @@ import (
 )
 
 // TestMountAssets_ServesIndexAndStatic 验证嵌入资源经 gin 正确提供:
-// GET / 渲染 index.html,GET /static/app.js 返回嵌入的 JS。
+// GET / 渲染 index.html,GET /static/js/app.js 返回嵌入的 JS。
 func TestMountAssets_ServesIndexAndStatic(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
@@ -45,18 +45,18 @@ func TestMountAssets_ServesIndexAndStatic(t *testing.T) {
 	if strings.Contains(w.Body.String(), "https://cdn.jsdelivr.net") {
 		t.Errorf("GET / body should use embedded Chart.js, got CDN reference: %s", w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), `/static/chart.umd.min.js`) {
+	if !strings.Contains(w.Body.String(), `/static/vendor/chart.umd.min.js`) {
 		t.Errorf("GET / body missing embedded Chart.js reference: %s", w.Body.String())
 	}
 
-	req2 := httptest.NewRequest(http.MethodGet, "/static/app.js", nil)
+	req2 := httptest.NewRequest(http.MethodGet, "/static/js/app.js", nil)
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req2)
 	if w2.Code != http.StatusOK {
-		t.Fatalf("GET /static/app.js status = %d, want 200", w2.Code)
+		t.Fatalf("GET /static/js/app.js status = %d, want 200", w2.Code)
 	}
 	if !strings.Contains(w2.Body.String(), "search") {
-		t.Errorf("GET /static/app.js body unexpected: %s", w2.Body.String())
+		t.Errorf("GET /static/js/app.js body unexpected: %s", w2.Body.String())
 	}
 }
 

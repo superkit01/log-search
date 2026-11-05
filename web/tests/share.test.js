@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert");
-const { encodeShareState, decodeShareState } = require("./static/share.js");
+const { encodeShareState, decodeShareState } = require("../static/js/share.js");
 
 test("encodeShareState: encodes current filters into query params", () => {
   const qs = encodeShareState({
@@ -89,4 +89,14 @@ test("share links preserve namespace", () => {
 
 test("a message-only share link restores the message filter", () => {
  assert.strictEqual(decodeShareState("?message_id=message-1").messageId, "message-1");
+});
+
+test("query links preserve an explicit page limit without adding a default", () => {
+  const qs = encodeShareState({env:"test",limit:50});
+  assert.strictEqual(new URLSearchParams(qs).get("limit"), "50");
+  assert.strictEqual(decodeShareState(qs).limit, 50);
+  assert.strictEqual(new URLSearchParams(encodeShareState({env:"test"})).has("limit"), false);
+  for (const value of [0,-1,1001,1.5]) {
+    assert.strictEqual(decodeShareState("env=test&limit="+value).limit, undefined);
+  }
 });

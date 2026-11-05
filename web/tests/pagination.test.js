@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert");
-const { shouldAutoLoadMore } = require("./static/pagination.js");
+const { shouldAutoLoadMore } = require("../static/js/pagination.js");
 
 test("shouldAutoLoadMore: near bottom with cursor and idle", () => {
   assert.strictEqual(shouldAutoLoadMore({

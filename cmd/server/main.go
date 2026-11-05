@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"log-search/internal/config"
-	"log-search/internal/elasticsearch"
-	"log-search/internal/loki"
 	"log-search/internal/storage"
+	"log-search/internal/storage/elasticsearch"
+	"log-search/internal/storage/loki"
 	"log-search/internal/web"
 	assets "log-search/web"
 
@@ -61,7 +61,9 @@ func main() {
 		slog.Error("mount embedded assets failed", "err", err)
 		os.Exit(1)
 	}
-	web.New(client, limit, cfg.UI).Register(r)
+	handler := web.New(client, limit, cfg.UI)
+	handler.Register(r)
+	handler.RegisterMCP(r, cfg.MCP)
 
 	slog.Info("starting log-search", "addr", cfg.Server.Addr)
 	if err := newHTTPServer(cfg, r).ListenAndServe(); err != nil && err != http.ErrServerClosed {

@@ -1,0 +1,42 @@
+{{define "display-settings"}}
+      <details class="settings" id="settings">
+        <summary class="theme-toggle" title="设置" aria-label="设置">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m9 3-.6 2.4-1.5.9-2.4-.7-3 5.2L3.3 12l-1.8 1.2 3 5.2 2.4-.7 1.5.9L9 21h6l.6-2.4 1.5-.9 2.4.7 3-5.2-1.8-1.2 1.8-1.2-3-5.2-2.4.7-1.5-.9L15 3z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </summary>
+        <div class="settings-panel" aria-label="显示设置">
+          <h2>显示设置</h2>
+      <label class="font-size-control" for="font-size">字号
+        <select id="font-size" aria-label="全页字号">
+          <option value="90">90%</option>
+          <option value="100" selected>100%（默认）</option>
+          <option value="110">110%</option>
+          <option value="120">120%</option>
+          <option value="130">130%</option>
+          <option value="150">150%</option>
+        </select>
+      </label>
+          <div class="settings-row"><span>主题</span>
+      <button type="button" id="theme-toggle" class="theme-toggle" title="切换主题" aria-label="切换主题">
+        <svg class="theme-icon-dark" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+        <svg class="theme-icon-light" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+        <span id="theme-label">深色</span>
+      </button>
+          </div>
+        </div>
+      </details>
+{{end}}

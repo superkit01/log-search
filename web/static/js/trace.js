@@ -9,6 +9,7 @@ function traceDrilldownState(current, line, traceId) {
     direction: (current && current.direction) || "FORWARD",
     keyword: "",
     traceId: tid,
+    ...(current.limit ? {limit: current.limit} : {}),
     start: current.start,
     end: current.end,
   };

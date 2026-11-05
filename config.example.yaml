@@ -1,44 +1,97 @@
+# 配置修改后需重启服务。config.yaml 保存本地地址与密钥，请勿提交到版本库。
+# ${VAR} 从环境变量读取；${VAR:-default} 在环境变量未设置或为空时使用默认值。
+# MCP Streamable HTTP endpoint: /mcp; Authorization: Bearer <MCP_API_KEY>
+# 外部 Agent 的 MCP 接入配置；与普通日志页面的访问规则独立。
+mcp:
+  # 是否启用 /mcp，默认 false；启用时至少配置一个有效用户 Key。
+  enabled: false
+  # 用户凭据列表，每项包含 name 和 api-key，单个用户也配置一项；不支持 api_key 字段。name 不可为空或重复；api-key 不可为空、重复或包含空白字符；删除用户并重启可撤销其 Key。
+  credentials:
+    # 此名称用于区分用户；客户端发送 Authorization: Bearer <该用户的Key>，各用户当前查询权限相同。
+    - name: "alice"
+      api-key: "${MCP_ALICE_API_KEY:-}"
+    # 此名称用于区分用户；客户端发送 Authorization: Bearer <该用户的Key>，各用户当前查询权限相同。
+    - name: "bob"
+      api-key: "${MCP_BOB_API_KEY:-}"
+  # 浏览器访问本服务的根地址，默认 http://localhost:8080；用于查询链接及 Origin 校验，部署到其他地址/端口时同步修改。
+  external_url: "${MCP_EXTERNAL_URL:-http://localhost:8080}"
+
+# 日志查询服务监听配置。
 server:
+  # 监听地址，默认 :8080；:8080 监听所有网卡，127.0.0.1:8080 仅允许本机访问。
   addr: "${SERVER_ADDR:-:8080}"
 
+# 日志存储连接；仅使用 type 选中的后端。
 storage:
+  # 后端类型：loki 或 es，未配置时默认 loki；示例通过环境变量默认选择 es。
   type: "${STORAGE_TYPE:-es}"  # 存储类型: loki 或 es
 
   # Loki 配置 (type=loki 时使用)
+  # Loki 专用配置，仅 type=loki 时生效。
   loki:
+    # 存储服务的 HTTP(S) 根地址，不填写具体查询 API 路径。
     url: "${LOKI_URL:-http://localhost:3100}"          # Loki 地址
+    # 单次存储 HTTP 请求超时，默认 30s，使用 Go duration 格式，如 10s、1m。
     timeout: "${LOKI_TIMEOUT:-30s}"                    # HTTP 客户端超时
-    default_limit: ${LOKI_DEFAULT_LIMIT:-1000}         # 查询默认条数
+    # 默认每页最多返回条数：1–1000，未设置或 <=0 时使用 1000；请求 limit 可覆盖，范围同为 1–1000。
+    default_limit: ${LOKI_DEFAULT_LIMIT:-1000}         # 默认每页条数，可由请求 limit 覆盖
 
   # Elasticsearch 配置 (type=es 时使用)
+  # Elasticsearch 专用配置，仅 type=es 时生效。
   elasticsearch:
+    # 存储服务的 HTTP(S) 根地址，不填写具体查询 API 路径。
     url: "${ES_URL:-http://localhost:9200}"            # ES 地址
+    # 单次存储 HTTP 请求超时，默认 30s，使用 Go duration 格式，如 10s、1m。
     timeout: "${ES_TIMEOUT:-30s}"                      # HTTP 客户端超时
-    default_limit: ${ES_DEFAULT_LIMIT:-1000}           # 查询默认条数
+    # 默认每页最多返回条数：1–1000，未设置或 <=0 时使用 1000；请求 limit 可覆盖，范围同为 1–1000。
+    default_limit: ${ES_DEFAULT_LIMIT:-1000}           # 默认每页条数，可由请求 limit 覆盖
+    # ES 索引模式，必填；支持 {namespace}、{env}、{yyyyMMdd}、{yyyy.MM.dd}、{yyyy.MM}、{yyyy} 及通配符。
     index: "app-log-{namespace}-{env}-{yyyyMMdd}"           # 索引名称模式,支持时间戳占位符
 
+    # 索引日期占位符使用的时区；未配置时默认 UTC，按实际索引分日规则填写，国内常用 Asia/Shanghai。
     index_timezone: Asia/Shanghai
+    # ES 精确查询字段映射：纯 keyword 用原字段，text 的 keyword 子字段用 .keyword。
     fields:
+      # 环境精确匹配字段；省略时为 env.keyword，若实际为 keyword 类型则填写 env。
       env: env
+      # 应用精确匹配字段，默认 app.keyword；按实际 ES mapping 配置。
       app: app.keyword
+      # 级别精确匹配字段，默认 level.keyword；按实际 ES mapping 配置。
       level: level
+      # 链路 ID 精确匹配字段，默认 tid.keyword；当前日志顶层 traceId 为 keyword 时填写 traceId。
       trace_id: traceId
+      # 优先发送大写级别；查询同时兼容大小写，不修改存储中的原始日志。
       uppercase_levels: true
 
+# 页面可选的平台、环境与应用；value 须与存储中的实际值一致。
 ui:
+  # 平台列表；日志查询默认使用第一项平台。
   namespaces:
+    # 页面显示名称，仅用于展示。
     - label: 默认平台
+      # 实际查询值，须与存储字段/索引值一致；同层级不可重复。
       value: default
+      # 此平台可选环境；平台未单独配置时继承 ui.envs，未配置全局环境时默认 demo。
       envs:
+        # 页面显示名称，仅用于展示。
         - label: 开发
+          # 实际查询值，须与存储字段/索引值一致；同层级不可重复。
           value: dev
+      # 此平台的应用列表，填写实际 app 值；全局 ui.apps 仅在未配置平台时使用。
       apps:
         - app-x
         - app-y
+      # 平台说明，作为页面提示信息，可省略。
       description: 默认业务空间的应用日志
+    # 页面显示名称，仅用于展示。
     - label: EMS
+      # 实际查询值，须与存储字段/索引值一致；同层级不可重复。
       value: ems
+      # 此平台可选环境；平台未单独配置时继承 ui.envs，未配置全局环境时默认 demo。
       envs:
+        # 页面显示名称，仅用于展示。
         - label: 开发
+          # 实际查询值，须与存储字段/索引值一致；同层级不可重复。
           value: dev
+      # 平台说明，作为页面提示信息，可省略。
       description: EMS 平台应用日志

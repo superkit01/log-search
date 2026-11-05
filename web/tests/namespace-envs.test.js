@@ -15,7 +15,7 @@ test('namespace environments preserve valid selection and fall back for saved or
       classList: { add: value => classes.add(value), remove: value => classes.delete(value) },
     };
   });
-  const source = fs.readFileSync(path.join(__dirname, 'static/app.js'), 'utf8');
+  const source = fs.readFileSync(path.join(__dirname, '../static/js/app.js'), 'utf8');
   const start = source.indexOf('function refreshNamespaceEnvs(');
   const end = source.indexOf('\nlet currentLines', start);
   const context = vm.createContext({

@@ -1,4 +1,4 @@
-const SHARE_KEYS = ["namespace", "env", "app", "levels", "direction", "keyword", "trace_id", "span_id", "parent_span_id", "task_id", "message_id", "start", "end"];
+const SHARE_KEYS = ["namespace", "env", "app", "levels", "direction", "keyword", "trace_id", "span_id", "parent_span_id", "task_id", "message_id", "start", "end", "limit"];
 const SHARE_LEVELS = typeof LEVEL_ORDER !== "undefined" ? LEVEL_ORDER : require("./levels.js").LEVEL_ORDER;
 const VALID_LEVELS = new Set(SHARE_LEVELS);
 const VALID_DIRECTIONS = new Set(["BACKWARD", "FORWARD"]);
@@ -36,6 +36,8 @@ function encodeShareState(state) {
  }
   if (start) params.set("start", String(start));
   if (end) params.set("end", String(end));
+  const limit = positiveInt(state && state.limit);
+  if (limit && limit <= 1000) params.set("limit", String(limit));
   return params.toString();
 }
 
@@ -50,6 +52,7 @@ function decodeShareState(search) {
     .filter((l) => VALID_LEVELS.has(l));
 
   return {
+    ...(positiveInt(params.get("limit")) <= 1000 && positiveInt(params.get("limit")) ? {limit: positiveInt(params.get("limit"))} : {}),
     namespace: normalizeText(params.get("namespace")),
     env: normalizeText(params.get("env")),
     app: normalizeText(params.get("app")),

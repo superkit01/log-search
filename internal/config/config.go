@@ -9,10 +9,13 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
-	"log-search/internal/elasticsearch"
+	"log-search/internal/mcp"
+	"log-search/internal/query"
+	"log-search/internal/storage/elasticsearch"
 )
 
 type Config struct {
+	MCP     mcp.Config `yaml:"mcp"`
 	Server  ServerCfg  `yaml:"server"`
 	Storage StorageCfg `yaml:"storage"`
 	UI      UICfg      `yaml:"ui"`
@@ -47,7 +50,7 @@ type ServerCfg struct {
 
 const (
 	DefaultQueryLimit = 1000
-	MaxQueryLimit     = 5000
+	MaxQueryLimit     = query.MaxLimit
 )
 
 type UICfg struct {
@@ -203,6 +206,9 @@ func (c *Config) validateES() error {
 }
 
 func (c *Config) validateCommon() error {
+	if err := c.MCP.Validate(); err != nil {
+		return err
+	}
 	if c.Server.Addr == "" {
 		c.Server.Addr = ":8080"
 	}

@@ -1,4 +1,4 @@
-package web
+package query
 
 import (
 	"strings"
@@ -6,7 +6,8 @@ import (
 	"log-search/internal/storage"
 )
 
-type queryRangeRequest struct {
+type Request struct {
+	Limit        *int     `json:"limit,omitempty"`
 	Namespace    string   `json:"namespace"`
 	Env          string   `json:"env"`
 	App          string   `json:"app"`
@@ -23,7 +24,7 @@ type queryRangeRequest struct {
 	Cursor       string   `json:"cursor"`
 }
 
-func (r queryRangeRequest) filters() storage.QueryFilters {
+func (r Request) Filters() storage.QueryFilters {
 	return storage.QueryFilters{
 		Namespace:    strings.TrimSpace(r.Namespace),
 		Env:          strings.TrimSpace(r.Env),

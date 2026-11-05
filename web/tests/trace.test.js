@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert");
-const { traceDrilldownState } = require("./static/trace.js");
+const { traceDrilldownState } = require("../static/js/trace.js");
 
 test("traceDrilldownState: preserves the current query time range", () => {
   const got = traceDrilldownState(

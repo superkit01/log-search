@@ -26,59 +26,14 @@ function refreshNamespaceEnvs(preferred) {
 let currentLines = [];
 let nextCursor = "";
 let lastQueryPayload = null;
+let requestedLimit;
 let isLoadingMore = false;
 const FILTERS_KEY = "log-search:filters"; // localStorage 键:存 {env, levels, direction}
-const FONT_SIZE_KEY = "log-search:font-size";
-function applyFontSize(value) {
-  const size = [90, 100, 110, 120, 130, 150].includes(Number(value)) ? Number(value) : 100;
-  document.documentElement.style.fontSize = `${16 * size / 100}px`;
-  $("font-size").value = String(size);
-  Chart.defaults.font.size = 12 * size / 100;
-  if (chart) chart.update("none");
-}
-let savedFontSize;
-try { savedFontSize = localStorage.getItem(FONT_SIZE_KEY); } catch (_) {}
-applyFontSize(savedFontSize);
-$("font-size").addEventListener("change", (event) => {
-  applyFontSize(event.target.value);
-  try { localStorage.setItem(FONT_SIZE_KEY, event.target.value); } catch (_) {}
-});
-const THEME_KEY = "log-search:theme"; // localStorage 键:存主题
 const DEFAULT_LEVELS = LEVEL_ORDER.slice();
 const CHART_LEVELS = LEVEL_ORDER.slice().reverse();
-
-// 主题切换
-function toggleTheme() {
-  const isLight = document.body.classList.toggle("light-theme");
-  localStorage.setItem(THEME_KEY, isLight ? "light" : "dark");
-  updateThemeIcon();
-}
-
-function updateThemeIcon() {
-  const isLight = document.body.classList.contains("light-theme");
-  $("theme-label").textContent = isLight ? "浅色" : "深色";
-  $("theme-toggle").setAttribute("aria-label", isLight ? "切换为深色主题" : "切换为浅色主题");
-  document.querySelector(".theme-icon-dark").style.display = isLight ? "none" : "block";
-  document.querySelector(".theme-icon-light").style.display = isLight ? "block" : "none";
-}
-
-function loadTheme() {
-  const saved = localStorage.getItem(THEME_KEY);
-  if (saved === "light") {
-    document.body.classList.add("light-theme");
-  }
-  updateThemeIcon();
-}
-
-$("theme-toggle").addEventListener("click", toggleTheme);
-document.addEventListener("click", (event) => {
-  if (!$("settings").contains(event.target)) $("settings").open = false;
-});
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && $("settings").open) {
-    $("settings").open = false;
-    $("settings").querySelector("summary").focus();
-  }
+initDisplaySettings(size => {
+  Chart.defaults.font.size = 12 * size / 100;
+  if (chart) chart.update("none");
 });
 
 function toLocalInput(ts) {
@@ -315,6 +270,7 @@ function queryLevels() {
 function currentShareState() {
   const levels = queryLevels();
   return {
+    ...(requestedLimit ? {limit: requestedLimit} : {}),
     namespace: activeTabValue("namespace-tabs"),
     env: activeTabValue("env-tabs"),
     app: $("app-select").value,
@@ -332,6 +288,7 @@ function currentShareState() {
 }
 
 function applyShareState(state) {
+  requestedLimit = state.limit;
   if (state.namespace) setActiveTabValue("namespace-tabs", state.namespace);
   refreshNamespaceApps();
   if (state.start) $("start").value = toLocalInput(state.start);
@@ -402,7 +359,7 @@ async function search(options) {
   if (!start || !end) { showError("请选择时间范围"); return; }
   const direction = activeTabValue("direction-tabs") || "BACKWARD";
   const { namespace, spanId, parentSpanId, taskId, messageId } = currentShareState();
- const payload = { namespace, env, app, levels, keyword, traceId, spanId, parentSpanId, taskId, messageId, start, end, direction };
+ const payload = { namespace, env, app, levels, keyword, traceId, spanId, parentSpanId, taskId, messageId, start, end, direction, ...(requestedLimit ? {limit: requestedLimit} : {}) };
   lastQueryPayload = payload;
   try {
     const j = await apiJSON("/api/query_range", payload);
@@ -689,9 +646,8 @@ function emptyLevelBucket() {
 }
 
 async function init() {
-  setDefaultRange();  // 默认当前时间往前1小时整点 ~ 今天 23:59
+  setDefaultRange();  // 默认今天 00:00 ~ 23:59
   loadFilters();      // 恢复 env、level
-  loadTheme();        // 恢复主题
 
   const shared = decodeShareState(window.location.search);
   if (shared) applyShareState(shared);

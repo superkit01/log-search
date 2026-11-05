@@ -161,6 +161,9 @@ func (c *httpClient) search(ctx context.Context, index string, body map[string]i
 	if err := decoder.Decode(out); err != nil {
 		return fmt.Errorf("es: decode response: %w (body=%s)", err, string(respBody))
 	}
+	if out.TimedOut || out.Shards.Failed > 0 {
+		return fmt.Errorf("es: incomplete search response (timed_out=%t, failed_shards=%d)", out.TimedOut, out.Shards.Failed)
+	}
 
 	return nil
 }
@@ -265,6 +268,10 @@ func formatIndexName(pattern string, t time.Time) string {
 
 // ES 搜索响应结构
 type searchResult struct {
+	TimedOut bool `json:"timed_out"`
+	Shards   struct {
+		Failed int `json:"failed"`
+	} `json:"_shards"`
 	PITID string `json:"pit_id"`
 	Hits  struct {
 		Total struct {

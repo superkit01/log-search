@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert");
-const { quickRangeTimestamps, defaultStartTs, defaultEndTs } = require("./static/timeRange.js");
+const { quickRangeTimestamps, defaultStartTs, defaultEndTs } = require("../static/js/timeRange.js");
 
 test("quickRangeTimestamps: 1h and 3h use rounded hour starts and today end", () => {
   const now = new Date("2026-07-03T08:35:12+08:00");
