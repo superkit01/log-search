@@ -387,14 +387,29 @@ body.light-theme #search { background: linear-gradient(135deg, #527ee8, #6366d9)
 .settings > summary { list-style: none; }
 .settings > summary::-webkit-details-marker { display: none; }
 .settings[open] > summary { background: #1c2940; color: #81a7ff; }
-.settings-panel { position: absolute; right: 0; top: calc(100% + 10px); z-index: 100; width: 17rem; max-width: calc(100vw - 40px); padding: 16px; border: 1px solid #36465f; border-radius: 12px; background: #182337; color: #dce5f2; box-shadow: 0 12px 36px #080f1c50; }
+.settings-panel { position: absolute; right: 0; top: calc(100% + 10px); z-index: 100; width: 17rem; max-width: calc(100vw - 40px); max-height: 80vh; overflow-y: auto; padding: 16px; border: 1px solid #36465f; border-radius: 12px; background: #182337; color: #dce5f2; box-shadow: 0 12px 36px #080f1c50; }
 .settings-panel h2 { margin: 0 0 16px; font-size: .875rem; font-weight: 600; }
 .settings-panel .font-size-control, .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: .8125rem; }
 .settings-row { margin-top: 14px; }
 .settings-panel #theme-toggle { gap: 8px; font-size: .8125rem; }
 .settings-panel #font-size { max-width: 11rem; }
+.mcp-settings-entry { padding-top: 14px; border-top: 1px solid #36465f; }
+.mcp-settings { width: 38rem; max-width: calc(100vw - 32px); max-height: 85vh; margin: auto; padding: 24px; overflow-y: auto; border: 1px solid #36465f; border-radius: 12px; background: #182337; color: #dce5f2; box-shadow: 0 16px 48px #080f1c80; font-size: .8125rem; line-height: 1.55; }
+.mcp-settings::backdrop { background: #080f1c99; }
+.mcp-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.mcp-settings h2 { margin: 0; font-size: 1rem; }
+.mcp-settings h3 { margin: 14px 0 8px; font-size: .8125rem; font-weight: 600; }
+.mcp-settings p { margin: 8px 0; }
+.mcp-settings code { overflow-wrap: anywhere; color: #a9c4ff; }
+.mcp-settings pre { margin: 8px 0; padding: 10px; overflow-x: auto; border-radius: 7px; background: #101a2a; white-space: pre-wrap; }
+.mcp-settings pre code { color: #dce5f2; }
 .settings > summary:focus-visible { outline: 2px solid #81a7ff; outline-offset: 3px; }
 body.light-theme .settings-panel { background: #fff; color: #334155; border-color: #dce5f1; box-shadow: 0 12px 36px #233b5e20; }
+body.light-theme .mcp-settings { background: #fff; color: #334155; border-color: #dce5f1; }
+body.light-theme .mcp-settings-entry { border-color: #dce5f1; }
+body.light-theme .mcp-settings code { color: #315eb8; }
+body.light-theme .mcp-settings pre { background: #f1f5f9; }
+body.light-theme .mcp-settings pre code { color: #334155; }
 body.light-theme .settings[open] > summary { background: #e7edf6; color: #416bd1; }
 
 .brand { display: flex; align-items: center; gap: 10px; }

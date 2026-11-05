@@ -6,7 +6,7 @@
             <circle cx="12" cy="12" r="3"/>
           </svg>
         </summary>
-        <div class="settings-panel" aria-label="显示设置">
+        <div class="settings-panel" aria-label="设置">
           <h2>显示设置</h2>
       <label class="font-size-control" for="font-size">字号
         <select id="font-size" aria-label="全页字号">
@@ -37,6 +37,36 @@
         <span id="theme-label">深色</span>
       </button>
           </div>
+          <div class="settings-row mcp-settings-entry"><span>MCP</span>
+            <button type="button" id="mcp-open" class="theme-toggle" aria-haspopup="dialog" aria-controls="mcp-dialog">接入</button>
+          </div>
         </div>
       </details>
+      <dialog id="mcp-dialog" class="mcp-settings" aria-labelledby="mcp-settings-title">
+            <div class="mcp-dialog-heading">
+              <h2 id="mcp-settings-title">MCP 接入</h2>
+              <button type="button" id="mcp-close" class="theme-toggle" aria-label="关闭 MCP 接入弹窗" autofocus>关闭</button>
+            </div>
+            {{if .mcpClientConfig}}
+            <h3>方式一：修改客户端配置文件</h3>
+            <p>在使用 <code>mcpServers</code> 的客户端配置中加入以下内容；已有该字段时，合并 <code>log-search</code> 项。</p>
+            <pre><code>{{.mcpClientConfig}}</code></pre>
+            <h3>方式二：让 Codex 安装</h3>
+            <p>将以下文本发送给 Codex：</p>
+            <pre><code>{{.mcpInstallText}}</code></pre>
+            {{else}}
+            <p>尚未配置 default 用户的 API Key。</p>
+            {{end}}
+            <h3>使用示例</h3>
+            <p>接入后，将下方的【】内容替换为实际排查信息，发送给 Codex：</p>
+            <pre><code>使用 log-search MCP，帮我排查【平台】的【环境】中，
+【应用】在【时间范围】出现的【问题现象】。
+
+先获取可用查询选项，确认平台、环境和应用。
+首次最多查询 20 条，优先用错误级别、关键词或关联 ID 缩小范围；
+根据结果按需查询关联日志或翻页。
+
+请给出问题现象、关键日志证据、可能原因和下一步建议，
+并附上日志查询链接。明确区分已确认事实与推测。</code></pre>
+      </dialog>
 {{end}}

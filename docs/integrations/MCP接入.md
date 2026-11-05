@@ -27,7 +27,13 @@ Content-Type: application/json
 Accept: application/json, text/event-stream
 ```
 
-未携带或错误 Key 返回 HTTP 401，附带 `WWW-Authenticate: Bearer`。此 Key 只保护 `/mcp`；原日志 UI 和 JSON 查询接口沿用现有内网部署访问方式。Key 不会下发到页面、查询配置或工具结果中。
+未携带或错误 Key 返回 HTTP 401，附带 `WWW-Authenticate: Bearer`。此 Key 只保护 `/mcp`；原日志 UI 和 JSON 查询接口沿用现有内网部署访问方式。页面右上角「设置 → MCP → 接入」弹窗直接展示 `mcp.external_url` 和 `name: default` 的 API Key，生成客户端配置与可发送给 Codex 的安装文本；访问页面即可读取此 Key。其他用户 Key 不在页面展示，查询选项接口和工具结果也不包含 Key。
+
+### 页面凭据展示：当前方案与后续计划
+
+当前日志系统尚未接入登录认证，因此暂时在 MCP 接入弹窗中直接展示配置文件里 `name: default` 对应的 API Key，方便用户复制客户端配置或将安装文本发送给 Codex。这是未接入登录认证阶段的临时方案。
+
+后续接入登录认证后，计划改为展示当前登录用户自己的 Token，并让两种接入方式的示例同步使用该用户的 Token，替代当前统一展示 default Key 的方式。该用户 Token 展示与登录认证目前尚未实现。
 
 ## Agent 配置示例
 

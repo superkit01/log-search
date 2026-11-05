@@ -1,11 +1,14 @@
 package web
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"log-search/internal/config"
+	"log-search/internal/mcp"
 	"log-search/internal/query"
 	"log-search/internal/storage"
 
@@ -14,9 +17,10 @@ import (
 
 // Handler 持有存储客户端与默认 limit。
 type Handler struct {
-	Client storage.Client
-	Limit  int
-	UI     UIOptions
+	Client    storage.Client
+	Limit     int
+	UI        UIOptions
+	mcpConfig mcp.Config
 }
 
 type UIOptions = config.UICfg
@@ -49,10 +53,28 @@ func (h *Handler) Register(r *gin.Engine) {
 }
 
 func (h *Handler) index(c *gin.Context) {
+	var clientConfig, installText string
+	for _, credential := range h.mcpConfig.Credentials {
+		if credential.Name != "default" || credential.Key == "" {
+			continue
+		}
+		endpoint := strings.TrimRight(h.mcpConfig.ExternalURL, "/") + "/mcp"
+		encoded, _ := json.MarshalIndent(map[string]any{
+			"mcpServers": map[string]any{"log-search": map[string]any{
+				"url":     endpoint,
+				"headers": map[string]string{"Authorization": "Bearer " + credential.Key},
+			}},
+		}, "", "  ")
+		clientConfig = string(encoded)
+		installText = fmt.Sprintf("帮我安装这个 MCP 到 Codex：\n名称：log-search\n地址：%s\n传输方式：Streamable HTTP\n认证方式：Authorization: Bearer %s\n请保留已有 MCP 配置，添加此服务并检查是否能获取工具列表。", endpoint, credential.Key)
+		break
+	}
 	c.HTML(http.StatusOK, "index.html", gin.H{
-		"envs":       h.UI.Envs,
-		"namespaces": h.UI.Namespaces,
-		"apps":       h.UI.Apps,
+		"mcpClientConfig": clientConfig,
+		"mcpInstallText":  installText,
+		"envs":            h.UI.Envs,
+		"namespaces":      h.UI.Namespaces,
+		"apps":            h.UI.Apps,
 	})
 }
 

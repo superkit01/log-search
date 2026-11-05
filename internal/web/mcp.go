@@ -8,6 +8,7 @@ import (
 )
 
 func (h *Handler) RegisterMCP(r *gin.Engine, cfg mcp.Config) {
+	h.mcpConfig = cfg
 	if !cfg.Enabled {
 		return
 	}

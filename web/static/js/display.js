@@ -23,6 +23,17 @@ function initDisplaySettings(onFontSize) {
     const light = !document.body.classList.contains("light-theme");
     applyTheme(light); save("log-search:theme", light ? "light" : "dark");
   });
+  const mcpDialog = el("mcp-dialog");
+  el("mcp-open").addEventListener("click", () => {
+    el("settings").open = false;
+    mcpDialog.showModal();
+  });
+  el("mcp-close").addEventListener("click", () => mcpDialog.close());
+  mcpDialog.addEventListener("click", e => {
+    const bounds = mcpDialog.getBoundingClientRect();
+    if (e.target === mcpDialog && (e.clientX < bounds.left || e.clientX > bounds.right || e.clientY < bounds.top || e.clientY > bounds.bottom)) mcpDialog.close();
+  });
+  mcpDialog.addEventListener("close", () => el("settings").querySelector("summary").focus());
   document.addEventListener("click", e => { if (!el("settings").contains(e.target)) el("settings").open = false; });
   document.addEventListener("keydown", e => {
     if (e.key === "Escape" && el("settings").open) { el("settings").open = false; el("settings").querySelector("summary").focus(); }

@@ -1,6 +1,7 @@
 package web
 
 import (
+	"log-search/internal/mcp"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +11,36 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+func TestIndexMCPUsesDefaultCredential(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	for _, hasDefault := range []bool{true, false} {
+		r := gin.New()
+		if err := MountAssets(r, assets.FS); err != nil {
+			t.Fatal(err)
+		}
+		h := New(&mockStorage{}, 1000)
+		h.Register(r)
+		credentials := []mcp.Credential{{Name: "alice", Key: "alice-private-token"}}
+		if hasDefault {
+			credentials = append(credentials, mcp.Credential{Name: "default", Key: "default-token"})
+		}
+		h.RegisterMCP(r, mcp.Config{Enabled: true, ExternalURL: "https://logs.example.com/", Credentials: credentials})
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
+		body := w.Body.String()
+		if w.Code != http.StatusOK || strings.Contains(body, "alice-private-token") {
+			t.Fatal("unexpected response or non-default credential exposed")
+		}
+		if hasDefault {
+			if strings.Count(body, "Bearer default-token") != 2 || strings.Count(body, "https://logs.example.com/mcp") != 2 {
+				t.Fatal("both connection methods must use configured URL and default credential")
+			}
+		} else if !strings.Contains(body, "尚未配置 default 用户的 API Key") {
+			t.Fatal("missing default credential should be indicated")
+		}
+	}
+}
 
 // TestMountAssets_ServesIndexAndStatic 验证嵌入资源经 gin 正确提供:
 // GET / 渲染 index.html,GET /static/js/app.js 返回嵌入的 JS。
