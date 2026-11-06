@@ -57,8 +57,8 @@
             <select id="app-select">
               <option value="">不限</option>
               {{if .namespaces}}
-              {{range .namespaces}}{{$namespace := .Value}}{{range .Apps}}<option data-namespace="{{$namespace}}" value="{{.}}">{{.}}</option>{{end}}{{end}}
-              {{else}}{{range .apps}}<option value="{{.}}">{{.}}</option>{{end}}{{end}}
+              {{range .namespaces}}{{$namespace := .Value}}{{range .Envs}}{{$env := .Value}}{{range .Apps}}<option data-namespace="{{$namespace}}" data-env="{{$env}}" value="{{.Name}}" title="{{.Repo}}">{{.Name}}</option>{{end}}{{end}}{{end}}
+              {{else}}{{range .envs}}{{$env := .Value}}{{range .Apps}}<option data-env="{{$env}}" value="{{.Name}}" title="{{.Repo}}">{{.Name}}</option>{{end}}{{end}}{{end}}
             </select>
             <button type="button" id="app-clear" class="clear-icon" title="清除应用筛选" aria-label="清除应用筛选" hidden>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">

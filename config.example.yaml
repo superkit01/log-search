@@ -71,27 +71,26 @@ ui:
     - label: 默认平台
       # 实际查询值，须与存储字段/索引值一致；同层级不可重复。
       value: default
-      # 此平台可选环境；平台未单独配置时继承 ui.envs，未配置全局环境时默认 demo。
+      # 环境下配置可选应用；repo 填写 Git 仓库路径和分支，格式为 group/project:branch。
       envs:
-        # 页面显示名称，仅用于展示。
         - label: 开发
-          # 实际查询值，须与存储字段/索引值一致；同层级不可重复。
           value: dev
-      # 此平台的应用列表，填写实际 app 值；全局 ui.apps 仅在未配置平台时使用。
-      apps:
-        - app-x
-        - app-y
+          apps:
+            - name: app-x
+              repo: example/app-x:develop
+            - name: app-y
+              repo: example/app-y:develop
       # 平台说明，作为页面提示信息，可省略。
       description: 默认业务空间的应用日志
     # 页面显示名称，仅用于展示。
     - label: EMS
       # 实际查询值，须与存储字段/索引值一致；同层级不可重复。
       value: ems
-      # 此平台可选环境；平台未单独配置时继承 ui.envs，未配置全局环境时默认 demo。
       envs:
-        # 页面显示名称，仅用于展示。
         - label: 开发
-          # 实际查询值，须与存储字段/索引值一致；同层级不可重复。
           value: dev
+          apps:
+            - name: ems-api
+              repo: example/ems-api:develop
       # 平台说明，作为页面提示信息，可省略。
       description: EMS 平台应用日志

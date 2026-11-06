@@ -54,17 +54,22 @@ const (
 )
 
 type UICfg struct {
-	Namespaces []UIOption `yaml:"namespaces"`
-	Envs       []UIOption `yaml:"envs"`
-	Apps       []string   `yaml:"apps"`
+	Namespaces []UIOption `yaml:"namespaces" json:"namespaces"`
+	Envs       []UIOption `yaml:"envs" json:"envs"`
+	Apps       []UIApp    `yaml:"apps" json:"apps"`
 }
 
 type UIOption struct {
-	Envs        []UIOption `yaml:"envs"`
-	Apps        []string   `yaml:"apps"`
-	Description string     `yaml:"description"`
-	Label       string     `yaml:"label"`
-	Value       string     `yaml:"value"`
+	Envs        []UIOption `yaml:"envs" json:"envs,omitempty"`
+	Apps        []UIApp    `yaml:"apps" json:"apps,omitempty"`
+	Description string     `yaml:"description" json:"description,omitempty"`
+	Label       string     `yaml:"label" json:"label"`
+	Value       string     `yaml:"value" json:"value"`
+}
+
+type UIApp struct {
+	Name string `yaml:"name" json:"name"`
+	Repo string `yaml:"repo" json:"repo"`
 }
 
 func DefaultUICfg() UICfg {
@@ -223,7 +228,6 @@ func validateUIOptions(ui *UICfg) error {
 		option.Value = strings.TrimSpace(option.Value)
 		option.Label = strings.TrimSpace(option.Label)
 		option.Description = strings.TrimSpace(option.Description)
-		option.Apps = compactStrings(option.Apps)
 		if !regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`).MatchString(option.Value) {
 			return fmt.Errorf("ui.namespaces[%d].value must be a literal namespace", i)
 		}
@@ -248,8 +252,13 @@ func validateUIOptions(ui *UICfg) error {
 		if ui.Envs[i].Label == "" {
 			ui.Envs[i].Label = ui.Envs[i].Value
 		}
+		if err := validateUIApps(ui.Envs[i].Apps); err != nil {
+			return fmt.Errorf("ui.envs[%d].apps: %w", i, err)
+		}
 	}
-	ui.Apps = compactStrings(ui.Apps)
+	if err := validateUIApps(ui.Apps); err != nil {
+		return fmt.Errorf("ui.apps: %w", err)
+	}
 	for i := range ui.Namespaces {
 		option := &ui.Namespaces[i]
 		if len(option.Envs) == 0 {
@@ -260,6 +269,27 @@ func validateUIOptions(ui *UICfg) error {
 			return fmt.Errorf("ui.namespaces[%d]: %w", i, err)
 		}
 		option.Envs = scoped.Envs
+		for j := range option.Envs {
+			if err := validateUIApps(option.Envs[j].Apps); err != nil {
+				return fmt.Errorf("ui.namespaces[%d].envs[%d].apps: %w", i, j, err)
+			}
+		}
+	}
+	return nil
+}
+
+func validateUIApps(apps []UIApp) error {
+	seen := map[string]bool{}
+	for i := range apps {
+		apps[i].Name = strings.TrimSpace(apps[i].Name)
+		apps[i].Repo = strings.TrimSpace(apps[i].Repo)
+		if apps[i].Name == "" {
+			return fmt.Errorf("[%d].name is required", i)
+		}
+		if seen[apps[i].Name] {
+			return fmt.Errorf("duplicate app name %q", apps[i].Name)
+		}
+		seen[apps[i].Name] = true
 	}
 	return nil
 }

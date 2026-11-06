@@ -4,9 +4,10 @@ function refreshNamespaceApps() {
   const select = $("app-select");
   const previous = select.value;
   const namespace = activeTabValue("namespace-tabs");
+  const env = activeTabValue("env-tabs");
   const scoped = !!$("namespace-tabs");
   select.replaceChildren(new Option("不限", ""));
-  configuredAppOptions.filter(option => !scoped || option.dataset.namespace === namespace).forEach(option => select.appendChild(option.cloneNode(true)));
+  configuredAppOptions.filter(option => (!scoped || option.dataset.namespace === namespace) && option.dataset.env === env).forEach(option => select.appendChild(option.cloneNode(true)));
   select.value = Array.from(select.options).some(option => option.value === previous) ? previous : "";
   syncClearButtons();
 }
@@ -149,6 +150,7 @@ document.querySelectorAll("#env-tabs .env-tab").forEach((tab) => {
   tab.addEventListener("click", () => {
     document.querySelectorAll("#env-tabs .env-tab").forEach(t => t.classList.remove("active"));
     tab.classList.add("active");
+    refreshNamespaceApps();
     saveFilters();
   });
 });

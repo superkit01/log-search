@@ -58,10 +58,12 @@ Accept: application/json, text/event-stream
 
 | 名称 | 输入与行为 |
 |---|---|
-| `get_query_options` | `{}`；获取配置的平台、环境和应用，字段与 UI 配置一致（`Namespaces`、`Envs`、`Apps`） |
+| `get_query_options` | `{}`；获取平台、环境和应用目录。返回 `namespaces[].value`、`namespaces[].envs[].value`，以及环境下 `apps[]` 的 `name` 和 `repo`。`repo` 格式为 `group/project:branch`；为空表示尚无确认映射。查询前先调用此工具确定配置值，不要猜测 app 或仓库。 |
 | `query_logs` | `namespace`、`env`、`start`、`end`；可选 app、levels、keyword、traceId、taskId、messageId、spanId、parentSpanId、direction、cursor、limit |
 
 平台和环境由用户选定；时间及其他条件由 Agent 根据问题拼接。时间为 Unix **秒**，end 必须晚于 start；未说明时间建议查今天，有歧义先追问。limit 为可选的 1–1000 整数，未传使用服务端 default_limit；翻页保持该值。方向默认 BACKWARD。日志级别支持 debug/info/warn/error，空数组表示全部。关键词语法与原 API 一致。
+
+`query_logs` 按 namespace、env 和 app 查询日志。可先用 `get_query_options` 查看该应用对应的 `repo`；仓库字段只用于定位代码仓库与分支，不会自动触发 Git 操作，也不会改变日志查询范围。
 
 ### 可选 limit 与 token 消耗
 

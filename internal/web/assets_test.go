@@ -1,6 +1,7 @@
 package web
 
 import (
+	"log-search/internal/config"
 	"log-search/internal/mcp"
 	"net/http"
 	"net/http/httptest"
@@ -51,8 +52,7 @@ func TestMountAssets_ServesIndexAndStatic(t *testing.T) {
 		t.Fatalf("MountAssets: %v", err)
 	}
 	New(&mockStorage{}, 1000, UIOptions{
-		Envs: []Choice{{Label: "预发", Value: "staging"}},
-		Apps: []string{"alert-service"},
+		Envs: []Choice{{Label: "预发", Value: "staging", Apps: []config.UIApp{{Name: "alert-service", Repo: "team/alert-service:develop"}}}},
 	}).Register(r)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -116,15 +116,15 @@ func TestIndexNamespaceApps(t *testing.T) {
 		t.Fatal(err)
 	}
 	New(&mockStorage{}, 100, UIOptions{Namespaces: []Choice{
-		{Value: "default", Label: "默认", Apps: []string{"gateway"}},
-		{Value: "pts", Label: "试验", Apps: []string{"worker"}},
-	}, Apps: []string{"legacy"}}).Register(r)
+		{Value: "default", Label: "默认", Envs: []Choice{{Value: "dev", Apps: []config.UIApp{{Name: "gateway", Repo: "team/gateway:develop"}}}}},
+		{Value: "pts", Label: "试验", Envs: []Choice{{Value: "test", Apps: []config.UIApp{{Name: "worker"}}}}},
+	}}).Register(r)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
 	if w.Code != http.StatusOK {
 		t.Fatal(w.Body.String())
 	}
-	for _, option := range []string{`data-namespace="default" value="gateway"`, `data-namespace="pts" value="worker"`} {
+	for _, option := range []string{`data-namespace="default" data-env="dev" value="gateway"`, `data-namespace="pts" data-env="test" value="worker"`} {
 		if !strings.Contains(w.Body.String(), option) {
 			t.Errorf("missing %s", option)
 		}
