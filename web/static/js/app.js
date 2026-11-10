@@ -113,9 +113,9 @@ function loadFilters() {
   const namespaceTabs = Array.from(document.querySelectorAll("#namespace-tabs .env-tab"));
   const selectedNamespace = namespaceTabs.find(tab => tab.dataset.value === namespace) || namespaceTabs[0];
   setActiveTabValue("namespace-tabs", selectedNamespace ? selectedNamespace.dataset.value : "");
-  refreshNamespaceApps();
   setActiveLevels(levels);
   refreshNamespaceEnvs(env);
+  refreshNamespaceApps();
   setActiveTabValue("direction-tabs", direction || "BACKWARD");
 }
 
