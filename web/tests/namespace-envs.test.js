@@ -16,6 +16,7 @@ test('namespace environments preserve valid selection and fall back for saved or
     };
   });
   const source = fs.readFileSync(path.join(__dirname, '../static/js/app.js'), 'utf8');
+  const appScopes = [];
   const start = source.indexOf('function refreshNamespaceEnvs(');
   const end = source.indexOf('\nlet currentLines', start);
   const context = vm.createContext({
@@ -23,6 +24,7 @@ test('namespace environments preserve valid selection and fall back for saved or
     activeTabValue: id => id === 'namespace-tabs' ? namespace :
       (tabs.find(tab => tab.classes.has('active'))?.dataset.value || ''),
     document: { querySelectorAll: () => tabs },
+    refreshNamespaceApps: () => appScopes.push([namespace, context.activeTabValue('env-tabs')]),
   });
   vm.runInContext(source.slice(start, end), context);
   const selected = () => tabs.filter(tab => tab.classes.has('active')).map(tab => [tab.dataset.namespace, tab.dataset.value]);
@@ -34,4 +36,5 @@ test('namespace environments preserve valid selection and fall back for saved or
   context.refreshNamespaceEnvs('dev');
   assert.deepEqual(selected(), [['ems', 'prod']]);
   assert.ok(tabs.filter(tab => tab.dataset.namespace === 'default').every(tab => tab.hidden));
+  assert.deepEqual(appScopes, [['default', 'test'], ['ems', 'test'], ['ems', 'prod']]);
 });

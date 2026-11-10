@@ -23,6 +23,7 @@ function refreshNamespaceEnvs(preferred) {
   const visible = tabs.filter(tab => !tab.hidden);
   const selected = visible.find(tab => tab.dataset.value === previous) || visible[0];
   if (selected) selected.classList.add("active");
+  refreshNamespaceApps();
 }
 let currentLines = [];
 let nextCursor = "";
@@ -115,7 +116,6 @@ function loadFilters() {
   setActiveTabValue("namespace-tabs", selectedNamespace ? selectedNamespace.dataset.value : "");
   setActiveLevels(levels);
   refreshNamespaceEnvs(env);
-  refreshNamespaceApps();
   setActiveTabValue("direction-tabs", direction || "BACKWARD");
 }
 
@@ -156,13 +156,12 @@ document.querySelectorAll("#env-tabs .env-tab").forEach((tab) => {
 });
 
 document.querySelectorAll("#namespace-tabs .env-tab").forEach(tab => {
- tab.addEventListener("click", () => {
- setActiveTabValue("namespace-tabs", tab.dataset.value);
- refreshNamespaceApps();
- refreshNamespaceEnvs();
- saveFilters();
- search();
- });
+  tab.addEventListener("click", () => {
+    setActiveTabValue("namespace-tabs", tab.dataset.value);
+    refreshNamespaceEnvs();
+    saveFilters();
+    search();
+  });
 });
 
 // 方向选项卡点击处理
@@ -292,7 +291,6 @@ function currentShareState() {
 function applyShareState(state) {
   requestedLimit = state.limit;
   if (state.namespace) setActiveTabValue("namespace-tabs", state.namespace);
-  refreshNamespaceApps();
   if (state.start) $("start").value = toLocalInput(state.start);
   if (state.end) $("end").value = toLocalInput(state.end);
   $("keyword").value = state.keyword || "";
