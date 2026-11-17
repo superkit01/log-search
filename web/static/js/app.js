@@ -9,7 +9,7 @@ function refreshNamespaceApps() {
   select.replaceChildren(new Option("不限", ""));
   configuredAppOptions.filter(option => (!scoped || option.dataset.namespace === namespace) && option.dataset.env === env).forEach(option => select.appendChild(option.cloneNode(true)));
   select.value = Array.from(select.options).some(option => option.value === previous) ? previous : "";
-  syncClearButtons();
+  syncAppPicker();
 }
 let chart;
 function refreshNamespaceEnvs(preferred) {
@@ -90,7 +90,7 @@ function saveFilters() {
     const env = envTab ? envTab.dataset.value : "";
     const levelTabs = document.querySelectorAll("#level-tabs .env-tab.active");
     const levels = Array.from(levelTabs).map(t => t.dataset.value);
-    const direction = $("direction").value;
+    const direction = activeTabValue("direction-tabs") || "BACKWARD";
     const filters = { namespace: activeTabValue("namespace-tabs"), env, levels, direction };
     localStorage.setItem(FILTERS_KEY, JSON.stringify(filters));
   } catch (_) { /* localStorage 不可用时忽略,不阻塞查询 */ }
@@ -115,12 +115,14 @@ function loadFilters() {
   setActiveTabValue("namespace-tabs", selectedNamespace ? selectedNamespace.dataset.value : "");
   setActiveLevels(levels);
   refreshNamespaceEnvs(env);
-  $("direction").value = direction === "FORWARD" ? "FORWARD" : "BACKWARD";
+  setActiveTabValue("direction-tabs", direction === "FORWARD" ? "FORWARD" : "BACKWARD");
 }
 
 function setActiveTabValue(id, value) {
   document.querySelectorAll("#" + id + " .env-tab").forEach(tab => {
-    tab.classList.toggle("active", !!value && tab.dataset.value === value);
+    const active = !!value && tab.dataset.value === value;
+    tab.classList.toggle("active", active);
+    if (tab.hasAttribute("aria-pressed")) tab.setAttribute("aria-pressed", String(active));
   });
 }
 
@@ -163,26 +165,69 @@ document.querySelectorAll("#namespace-tabs .env-tab").forEach(tab => {
   });
 });
 
-$("direction").addEventListener("change", saveFilters);
+document.querySelectorAll("#direction-tabs .env-tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    setActiveTabValue("direction-tabs", tab.dataset.value);
+    saveFilters();
+  });
+});
+
+const timeMotion = window.matchMedia("(prefers-reduced-motion: no-preference)");
+
+function setTimeInput(id, value, roll = false) {
+  const input = $(id);
+  const preview = input.nextElementSibling;
+  const previous = input.dataset.lastValue || "";
+  if (input.value !== value) input.value = value;
+  input.dataset.lastValue = input.value;
+  preview.hidden = !input.value;
+  const [oldText, newText] = [previous, input.value].map(time => time.replaceAll("-", "/").replace("T", " "));
+  const animate = roll && timeMotion.matches && oldText.length === newText.length;
+  const line = preview.firstElementChild;
+  line.replaceChildren(...Array.from(newText, (character, index) => {
+    const slot = document.createElement("span");
+    slot.textContent = character;
+    const previousDigit = oldText[index];
+    if (animate && character !== previousDigit && /\d/.test(character) && /\d/.test(previousDigit)) {
+      slot.className = "time-roll-digit";
+      slot.dataset.previous = previousDigit;
+    }
+    return slot;
+  }));
+}
 
 // setDefaultRange 把起止时间设为默认范围,作为页面初始值。
 function setDefaultRange() {
-  $("start").value = toLocalInput(defaultStartTs());
-  $("end").value = toLocalInput(defaultEndTs());
+  setTimeInput("start", toLocalInput(defaultStartTs()));
+  setTimeInput("end", toLocalInput(defaultEndTs()));
 }
 
 function setQuickRange(range) {
   const ts = quickRangeTimestamps(range);
-  $("start").value = toLocalInput(ts.start);
-  $("end").value = toLocalInput(ts.end);
+  setTimeInput("start", toLocalInput(ts.start), true);
+  setTimeInput("end", toLocalInput(ts.end), true);
 }
 
 // 时间输入框不允许清空:用户清空后,在 change 时恢复为当天默认值,避免提交空范围。
 ["start", "end"].forEach((id) => {
-  $(id).addEventListener("change", (e) => {
-    if (!e.target.value) {
-      e.target.value = toLocalInput(id === "start" ? defaultStartTs() : defaultEndTs());
-    }
+  const input = $(id);
+  const preview = input.nextElementSibling;
+  const stopRoll = () => {
+    preview.querySelectorAll(".time-roll-digit").forEach(digit => digit.classList.remove("time-roll-digit"));
+  };
+  for (const event of ["focus", "pointerdown", "keydown"]) {
+    input.addEventListener(event, () => {
+      preview.hidden = true;
+      stopRoll();
+    });
+  }
+  input.addEventListener("blur", () => { preview.hidden = !input.value; });
+  input.addEventListener("change", () => {
+    const value = input.value || toLocalInput(id === "start" ? defaultStartTs() : defaultEndTs());
+    setTimeInput(id, value, true);
+  });
+  preview.addEventListener("animationend", event => {
+    if (event.animationName === "time-digit-roll") stopRoll();
   });
 });
 
@@ -195,30 +240,113 @@ document.querySelectorAll(".time-shortcut").forEach((btn) => {
 
 const narrowLayout = window.matchMedia("(max-width: 760px)");
 function setSidebarExpanded(expanded) {
-  $("sidebar-toggle").setAttribute("aria-expanded", String(expanded));
+  const toggle = $("sidebar-toggle");
+  const label = expanded ? "收起查询条件" : "展开查询条件";
+  toggle.setAttribute("aria-expanded", String(expanded));
+  toggle.setAttribute("aria-label", label);
+  toggle.title = label;
   $("sidebar-filters").hidden = !expanded;
   scheduleAutoLoadCheck();
 }
 setSidebarExpanded(!narrowLayout.matches);
 $("sidebar-toggle").addEventListener("click", () => setSidebarExpanded($("sidebar-filters").hidden));
 // 带清除图标的字段:有值时显示图标,点击清空并聚焦。
-// select 用 change 事件;文本输入用 input 事件,随输入实时显隐。
+// 文本输入用 input 事件,随输入实时显隐。
 const clearSyncers = [];
-function bindClear(inputId, clearId, evt) {
+function bindClear(inputId, clearId) {
   const input = $(inputId), clear = $(clearId);
   const sync = () => { clear.hidden = !input.value; };
-  input.addEventListener(evt, sync);
+  input.addEventListener("input", sync);
   clear.addEventListener("click", () => { input.value = ""; sync(); input.focus(); });
   sync();
   clearSyncers.push(sync);
 }
-bindClear("app-select", "app-clear", "change");
-["trace-id", "span-id", "parent-span-id", "task-id", "message-id"].forEach(id => bindClear(id, id + "-clear", "input"));
-bindClear("keyword", "keyword-clear", "input");
+["keyword", "trace-id", "span-id", "parent-span-id", "task-id", "message-id"].forEach(id => bindClear(id, id + "-clear"));
 
 function syncClearButtons() {
   clearSyncers.forEach((sync) => sync());
 }
+
+const appPicker = $("app-picker");
+const appSelect = $("app-select");
+const appToggle = $("app-toggle");
+const appPanel = $("app-panel");
+const appFilter = $("app-filter");
+const appOptions = $("app-options");
+
+function syncAppPicker() {
+  const selected = appSelect.selectedOptions[0];
+  $("app-value").textContent = selected.text;
+  $("app-clear").hidden = !selected.value;
+}
+
+function renderAppOptions() {
+  const filter = appFilter.value.trim().toLowerCase();
+  const matches = Array.from(appSelect.options).filter(option =>
+    option.text.toLowerCase().includes(filter) || option.title.toLowerCase().includes(filter));
+  appOptions.replaceChildren(...matches.map(option => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "app-option";
+    button.dataset.value = option.value;
+    button.setAttribute("aria-pressed", String(option.selected));
+    const name = document.createElement("span");
+    name.textContent = option.text;
+    button.appendChild(name);
+    if (option.title) {
+      const repo = document.createElement("span");
+      repo.className = "app-repo";
+      repo.textContent = option.title;
+      button.appendChild(repo);
+    }
+    return button;
+  }));
+  appOptions.scrollTop = 0;
+  $("app-empty").hidden = matches.length > 0;
+}
+
+function setAppPickerOpen(open) {
+  appPanel.inert = !open;
+  appPanel.hidden = !open;
+  appToggle.setAttribute("aria-expanded", String(open));
+  if (open) {
+    appFilter.value = "";
+    renderAppOptions();
+    appFilter.focus();
+  }
+}
+
+function selectApp(value) {
+  appSelect.value = value;
+  syncAppPicker();
+  setAppPickerOpen(false);
+  appToggle.focus();
+}
+
+appToggle.addEventListener("click", () => setAppPickerOpen(appPanel.hidden));
+$("app-clear").addEventListener("click", () => selectApp(""));
+appFilter.addEventListener("input", renderAppOptions);
+appOptions.addEventListener("click", event => {
+  const option = event.target.closest(".app-option");
+  if (option) selectApp(option.dataset.value);
+});
+appPicker.addEventListener("keydown", event => {
+  if (appPanel.hidden || inputComposing || event.isComposing) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    setAppPickerOpen(false);
+    appToggle.focus();
+  } else if (event.target === appFilter && event.key === "ArrowDown") {
+    event.preventDefault();
+    appOptions.firstElementChild?.focus();
+  }
+});
+appPicker.addEventListener("focusout", event => {
+  if (!appPanel.hidden && event.relatedTarget && !appPicker.contains(event.relatedTarget)) setAppPickerOpen(false);
+});
+document.addEventListener("click", event => {
+  if (!appPanel.hidden && !appPicker.contains(event.target)) setAppPickerOpen(false);
+});
 
 // 文本输入框失焦时裁掉首尾空白(粘贴 traceId 时常见带尾随换行),避免把空格带入查询。
 ["keyword", "trace-id", "span-id", "parent-span-id", "task-id", "message-id"].forEach((id) => {
@@ -237,12 +365,17 @@ document.addEventListener("compositionend", (e) => {
   setTimeout(() => { inputCompositionJustEnded = false; }, 0);
 });
 
-// 在输入框(关键词/链路id/时间)内按回车即查询,与点"查询"按钮等价;
-// 输入法组合输入期间的回车仅确认候选字,不触发查询。
-// 仅响应 INPUT(按钮/选项卡走原生激活,避免重复触发)。
-document.addEventListener("keydown", (e) => {
-  if (shouldSubmitInputEnter(e, inputComposing || inputCompositionJustEnded)) search({ submitted: true });
+// 页面回车统一触发查询按钮，避免同时激活当前聚焦的控件。
+document.addEventListener("keydown", event => {
+  const submit = shouldSubmitQueryEnter(event, inputComposing || inputCompositionJustEnded);
+  if (event.target.tagName === "BUTTON" && (submit || event.key !== "Enter")) {
+    event.target.classList.toggle("query-enter-focus", submit);
+  }
+  if (!submit) return;
+  event.preventDefault();
+  $("search").click();
 });
+document.addEventListener("focusout", event => event.target.classList.remove("query-enter-focus"));
 
 function activeTabValue(id) {
   const tab = document.querySelector("#" + id + " .env-tab.active");
@@ -267,7 +400,7 @@ function currentShareState() {
     env: activeTabValue("env-tabs"),
     app: $("app-select").value,
     levels,
-    direction: $("direction").value,
+    direction: activeTabValue("direction-tabs") || "BACKWARD",
     keyword: $("keyword").value.trim(),
     traceId: $("trace-id").value.trim(),
  spanId: $("span-id").value.trim(),
@@ -282,8 +415,8 @@ function currentShareState() {
 function applyShareState(state) {
   requestedLimit = state.limit;
   if (state.namespace) setActiveTabValue("namespace-tabs", state.namespace);
-  if (state.start) $("start").value = toLocalInput(state.start);
-  if (state.end) $("end").value = toLocalInput(state.end);
+  if (state.start) setTimeInput("start", toLocalInput(state.start));
+  if (state.end) setTimeInput("end", toLocalInput(state.end));
   $("keyword").value = state.keyword || "";
   $("trace-id").value = state.traceId || "";
  $("span-id").value = state.spanId || "";
@@ -292,7 +425,7 @@ function applyShareState(state) {
   $("message-id").value = state.messageId || "";
   refreshNamespaceEnvs(state.env);
   setActiveLevels(state.levels || []);
-  if (state.direction) $("direction").value = state.direction === "FORWARD" ? "FORWARD" : "BACKWARD";
+  if (state.direction) setActiveTabValue("direction-tabs", state.direction);
 }
 
 function setSelectValue(sel, value) {
@@ -619,6 +752,7 @@ function renderChart(lines) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? false : { duration: 260 },
       plugins: {
         title: { display: true, text: `已加载日志按分钟统计（${lines.length} 条，非全量）`, color: "#a6b5cb" },
         legend: { labels: { color: "#ddd" } },
@@ -647,6 +781,7 @@ async function init() {
   if (shared) applyShareState(shared);
   if (shared) {
     setSelectValue($("app-select"), shared.app || "");
+    syncAppPicker();
     syncClearButtons();
     await search({ keepMessage: true });
   }
