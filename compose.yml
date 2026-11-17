@@ -1,0 +1,9 @@
+services:
+  log-search:
+    build: ./
+    container_name: log-search
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    restart: on-failure
