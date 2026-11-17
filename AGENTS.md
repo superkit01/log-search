@@ -62,7 +62,7 @@ Templates and static assets are **embedded** into the binary via `go:embed` (`we
 - **Enter submits the query unless an IME is composing.** `keyboard.js` `shouldSubmitInputEnter` ignores Enter while a CJK input method is mid-composition (`compositionstart`/`compositionend` toggle a shared `inputComposing` flag) and also guards the legacy `keyCode === 229`, so the composition-confirm Enter never fires a premature search.
 - **UI apps must match stored data.** `ui.apps` must list values that exist in the configured storage; selecting an absent app correctly returns zero rows.
 - **Tag colors are stable by key** (`app.js` `tagColorClass` + `TAG_PALETTE`, `style.css` `.tag-c0..c6`). `app` and `level` use fixed classes; every other label uses a deterministic key hash so the same key keeps its color across rows, pagination, and reloads regardless of label order or missing fields. Adding a palette slot requires updating **both** the JS array and the CSS classes (dark + light).
-- **Query form has four rows.** App/time; trace/task/message IDs; keyword/search/expand arrows; collapsed span/parent-span IDs. Shared settings manage theme/font size.
+- **Query form lives in a collapsible sidebar.** Environment, app, time, levels, keyword, and trace ID are visible when the sidebar is expanded. Task, message, span, and parent-span IDs are in a collapsed details section. On narrow screens the sidebar sits above the results and collapses after submission. Shared settings manage theme/font size.
 
 ## Documentation
 

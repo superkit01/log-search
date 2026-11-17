@@ -31,140 +31,158 @@
     </div>
   </header>
   <main>
-    <section class="controls">
-      <div class="row filter-tabs-row">
-        <div class="env-tabs level-tabs" id="level-tabs">
-          <button class="env-tab" data-value="debug">DEBUG</button>
-          <button class="env-tab" data-value="info">INFO</button>
-          <button class="env-tab" data-value="warn">WARN</button>
-          <button class="env-tab" data-value="error">ERROR</button>
-        </div>
-        <div class="env-tabs direction-tabs" id="direction-tabs">
-          <button class="env-tab" data-value="BACKWARD">倒序</button>
-          <button class="env-tab" data-value="FORWARD">正序</button>
-        </div>
-        <div class="env-tabs" id="env-tabs">
-          {{if .namespaces}}
-          {{range .namespaces}}{{$namespace := .Value}}{{range .Envs}}<button type="button" class="env-tab" data-namespace="{{$namespace}}" data-value="{{.Value}}">{{.Label}}</button>{{end}}{{end}}
-          {{else}}
-          {{range .envs}}<button type="button" class="env-tab" data-value="{{.Value}}">{{.Label}}</button>{{end}}
-          {{end}}
-        </div>
-      </div>
-      <div class="row query-row">
-        <label><span class="lbl">应用</span>
-          <span class="clear-field clear-field-select">
-            <select id="app-select">
-              <option value="">不限</option>
-              {{if .namespaces}}
-              {{range .namespaces}}{{$namespace := .Value}}{{range .Envs}}{{$env := .Value}}{{range .Apps}}<option data-namespace="{{$namespace}}" data-env="{{$env}}" value="{{.Name}}" title="{{.Repo}}">{{.Name}}</option>{{end}}{{end}}{{end}}
-              {{else}}{{range .envs}}{{$env := .Value}}{{range .Apps}}<option data-env="{{$env}}" value="{{.Name}}" title="{{.Repo}}">{{.Name}}</option>{{end}}{{end}}{{end}}
-            </select>
-            <button type="button" id="app-clear" class="clear-icon" title="清除应用筛选" aria-label="清除应用筛选" hidden>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-              </svg>
-            </button>
-          </span>
-        </label>
-        <div class="time-field">
-          <span class="lbl">时间</span>
-          <span class="time-inputs">
-            <input type="datetime-local" id="start" title="开始时间">
-            <span class="time-sep">~</span>
-            <input type="datetime-local" id="end" title="结束时间">
-          </span>
-          <span class="time-shortcuts">
-            <button type="button" class="time-shortcut" data-range="1h">1h</button>
-            <button type="button" class="time-shortcut" data-range="3h">3h</button>
-            <button type="button" class="time-shortcut" data-range="today">今天</button>
-          </span>
-        </div>
-      </div>
-      <div class="row query-row">
-        <label><span class="lbl">链路id</span>
-          <span class="clear-field">
-            <input type="text" id="trace-id" placeholder="链路id">
-            <button type="button" id="trace-id-clear" class="clear-icon" title="清除" aria-label="清除链路id" hidden>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-              </svg>
-            </button>
-          </span>
-        </label>
-        <label><span class="lbl">线程任务id</span>
-          <span class="clear-field">
-            <input type="text" id="task-id" placeholder="线程任务id">
-            <button type="button" id="task-id-clear" class="clear-icon" title="清除" aria-label="清除线程任务id" hidden>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-              </svg>
-            </button>
-          </span>
-        </label>
-        <label><span class="lbl">MQ消息id</span>
-          <span class="clear-field">
-            <input type="text" id="message-id" placeholder="MQ消息id">
-            <button type="button" id="message-id-clear" class="clear-icon" title="清除" aria-label="清除MQ消息id" hidden>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-              </svg>
-            </button>
-          </span>
-        </label>
-      </div>
-      <div class="row query-row">
-        <label><span class="lbl">关键词</span>
-          <span class="clear-field">
-            <input type="text" id="keyword" placeholder="匹配日志文本,如 error、timeout && retry、timeout || failed">
-            <button type="button" id="keyword-clear" class="clear-icon" title="清除" aria-label="清除关键词" hidden>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-              </svg>
-            </button>
-          </span>
-        </label>
-        <button type="button" id="search">查询</button>
-        <button type="button" id="span-filters-toggle" aria-expanded="false" aria-controls="span-filters-row" aria-label="展开 Span 筛选" title="展开 Span 筛选">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 7 6 6 6-6M6 13l6 6 6-6"/></svg>
+    <aside class="controls" aria-label="查询侧栏">
+      <div class="sidebar-heading">
+        <button type="button" id="sidebar-toggle" class="theme-toggle" aria-expanded="true" aria-controls="sidebar-filters" aria-label="查询条件" title="查询条件">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2"/>
+            <path d="M9 4v16"/>
+          </svg>
+          <span>查询条件</span>
         </button>
       </div>
-      <div class="row query-row" id="span-filters-row" hidden>
-        <label id="span-id-field"><span class="lbl">SpanId</span>
-          <span class="clear-field">
-            <input type="text" id="span-id" placeholder="SpanId">
-            <button type="button" id="span-id-clear" class="clear-icon" title="清除" aria-label="清除SpanId" hidden>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-              </svg>
-            </button>
-          </span>
-        </label>
-        <label id="parent-span-id-field"><span class="lbl">ParentSpanId</span>
-          <span class="clear-field">
-            <input type="text" id="parent-span-id" placeholder="ParentSpanId">
-            <button type="button" id="parent-span-id-clear" class="clear-icon" title="清除" aria-label="清除ParentSpanId" hidden>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-              </svg>
-            </button>
-          </span>
-        </label>
+      <div id="sidebar-filters" class="sidebar-filters">
+        <div class="sidebar-fields">
+          <div class="filter-group">
+            <span class="lbl" id="env-label">环境</span>
+            <div class="env-tabs" id="env-tabs" role="group" aria-labelledby="env-label">
+              {{if .namespaces}}
+              {{range .namespaces}}{{$namespace := .Value}}{{range .Envs}}<button type="button" class="env-tab" data-namespace="{{$namespace}}" data-value="{{.Value}}">{{.Label}}</button>{{end}}{{end}}
+              {{else}}
+              {{range .envs}}<button type="button" class="env-tab" data-value="{{.Value}}">{{.Label}}</button>{{end}}
+              {{end}}
+            </div>
+            <label><span class="lbl">应用</span>
+              <span class="clear-field clear-field-select">
+                <select id="app-select">
+                  <option value="">不限</option>
+                  {{if .namespaces}}
+                  {{range .namespaces}}{{$namespace := .Value}}{{range .Envs}}{{$env := .Value}}{{range .Apps}}<option data-namespace="{{$namespace}}" data-env="{{$env}}" value="{{.Name}}" title="{{.Repo}}">{{.Name}}</option>{{end}}{{end}}{{end}}
+                  {{else}}{{range .envs}}{{$env := .Value}}{{range .Apps}}<option data-env="{{$env}}" value="{{.Name}}" title="{{.Repo}}">{{.Name}}</option>{{end}}{{end}}{{end}}
+                </select>
+                <button type="button" id="app-clear" class="clear-icon" title="清除应用筛选" aria-label="清除应用筛选" hidden>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                  </svg>
+                </button>
+              </span>
+            </label>
+          </div>
+          <div class="filter-group" role="group" aria-labelledby="time-label">
+            <span class="lbl" id="time-label">时间范围</span>
+            <div class="time-shortcuts">
+              <button type="button" class="time-shortcut" data-range="1h">1h</button>
+              <button type="button" class="time-shortcut" data-range="3h">3h</button>
+              <button type="button" class="time-shortcut" data-range="today">今天</button>
+            </div>
+            <label class="time-field"><span>开始</span><input type="datetime-local" id="start"></label>
+            <label class="time-field"><span>结束</span><input type="datetime-local" id="end"></label>
+          </div>
+          <div class="filter-group">
+            <span class="lbl" id="level-label">日志级别</span>
+            <div class="env-tabs" id="level-tabs" role="group" aria-labelledby="level-label">
+              <button type="button" class="env-tab" data-value="debug">DEBUG</button>
+              <button type="button" class="env-tab" data-value="info">INFO</button>
+              <button type="button" class="env-tab" data-value="warn">WARN</button>
+              <button type="button" class="env-tab" data-value="error">ERROR</button>
+            </div>
+            <label><span class="lbl">关键词</span>
+              <span class="clear-field">
+                <input type="text" id="keyword" placeholder="如 timeout &amp;&amp; retry">
+                <button type="button" id="keyword-clear" class="clear-icon" title="清除" aria-label="清除关键词" hidden>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                  </svg>
+                </button>
+              </span>
+            </label>
+            <label><span class="lbl">链路 ID</span>
+              <span class="clear-field">
+                <input type="text" id="trace-id" placeholder="链路 ID">
+                <button type="button" id="trace-id-clear" class="clear-icon" title="清除" aria-label="清除链路 ID" hidden>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                  </svg>
+                </button>
+              </span>
+            </label>
+            <details class="advanced-filters">
+              <summary>更多 ID 筛选</summary>
+              <label><span class="lbl">线程任务 ID</span>
+                <span class="clear-field">
+                  <input type="text" id="task-id" placeholder="线程任务 ID">
+                  <button type="button" id="task-id-clear" class="clear-icon" title="清除" aria-label="清除线程任务 ID" hidden>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                    </svg>
+                  </button>
+                </span>
+              </label>
+              <label><span class="lbl">MQ 消息 ID</span>
+                <span class="clear-field">
+                  <input type="text" id="message-id" placeholder="MQ 消息 ID">
+                  <button type="button" id="message-id-clear" class="clear-icon" title="清除" aria-label="清除 MQ 消息 ID" hidden>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                    </svg>
+                  </button>
+                </span>
+              </label>
+              <label><span class="lbl">SpanId</span>
+                <span class="clear-field">
+                  <input type="text" id="span-id" placeholder="SpanId">
+                  <button type="button" id="span-id-clear" class="clear-icon" title="清除" aria-label="清除SpanId" hidden>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                    </svg>
+                  </button>
+                </span>
+              </label>
+              <label><span class="lbl">ParentSpanId</span>
+                <span class="clear-field">
+                  <input type="text" id="parent-span-id" placeholder="ParentSpanId">
+                  <button type="button" id="parent-span-id-clear" class="clear-icon" title="清除" aria-label="清除ParentSpanId" hidden>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                      <line x1="6" y1="6" x2="18" y2="18"></line>
+                      <line x1="18" y1="6" x2="6" y2="18"></line>
+                    </svg>
+                  </button>
+                </span>
+              </label>
+            </details>
+          </div>
+        </div>
+        <div class="sidebar-actions">
+          <label class="sort-field"><span>结果排序</span>
+            <select id="direction">
+              <option value="BACKWARD">倒序</option>
+              <option value="FORWARD">正序</option>
+            </select>
+          </label>
+          <button type="button" id="search">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>
+            </svg>
+            查询日志
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <section class="result-pane" aria-labelledby="result-title">
+      <h2 id="result-title">查询结果</h2>
+      <section id="error-bar" class="error" role="status" hidden></section>
+      <div class="scroll-area" id="scroll-area">
+        <section class="chart-wrap"><canvas id="chart" height="80"></canvas></section>
+        <section id="results" class="results"></section>
       </div>
     </section>
-
-    <section id="error-bar" class="error" hidden></section>
-    <div class="scroll-area" id="scroll-area">
-      <section class="chart-wrap"><canvas id="chart" height="80"></canvas></section>
-      <section id="results" class="results"></section>
-    </div>
   </main>
   <div id="query-loading" class="query-loading" role="status" aria-live="polite" hidden>
     <div class="query-loading-card">

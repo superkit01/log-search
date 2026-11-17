@@ -90,8 +90,7 @@ function saveFilters() {
     const env = envTab ? envTab.dataset.value : "";
     const levelTabs = document.querySelectorAll("#level-tabs .env-tab.active");
     const levels = Array.from(levelTabs).map(t => t.dataset.value);
-    const directionTab = document.querySelector("#direction-tabs .env-tab.active");
-    const direction = directionTab ? directionTab.dataset.value : "BACKWARD";
+    const direction = $("direction").value;
     const filters = { namespace: activeTabValue("namespace-tabs"), env, levels, direction };
     localStorage.setItem(FILTERS_KEY, JSON.stringify(filters));
   } catch (_) { /* localStorage 不可用时忽略,不阻塞查询 */ }
@@ -116,7 +115,7 @@ function loadFilters() {
   setActiveTabValue("namespace-tabs", selectedNamespace ? selectedNamespace.dataset.value : "");
   setActiveLevels(levels);
   refreshNamespaceEnvs(env);
-  setActiveTabValue("direction-tabs", direction || "BACKWARD");
+  $("direction").value = direction === "FORWARD" ? "FORWARD" : "BACKWARD";
 }
 
 function setActiveTabValue(id, value) {
@@ -164,14 +163,7 @@ document.querySelectorAll("#namespace-tabs .env-tab").forEach(tab => {
   });
 });
 
-// 方向选项卡点击处理
-document.querySelectorAll("#direction-tabs .env-tab").forEach((tab) => {
-  tab.addEventListener("click", () => {
-    document.querySelectorAll("#direction-tabs .env-tab").forEach(t => t.classList.remove("active"));
-    tab.classList.add("active");
-    saveFilters();
-  });
-});
+$("direction").addEventListener("change", saveFilters);
 
 // setDefaultRange 把起止时间设为默认范围,作为页面初始值。
 function setDefaultRange() {
@@ -194,22 +186,21 @@ function setQuickRange(range) {
   });
 });
 
-$("search").addEventListener("click", search);
+$("search").addEventListener("click", () => search({ submitted: true }));
 $("share").addEventListener("click", shareCurrentQuery);
 $("scroll-area").addEventListener("scroll", onResultsScroll);
 document.querySelectorAll(".time-shortcut").forEach((btn) => {
   btn.addEventListener("click", () => setQuickRange(btn.dataset.range));
 });
 
-$("span-filters-toggle").addEventListener("click", () => {
-  const button = $("span-filters-toggle");
-  const expanded = button.getAttribute("aria-expanded") !== "true";
-  $("span-filters-row").hidden = !expanded;
-  button.setAttribute("aria-expanded", String(expanded));
-  const label = expanded ? "收起 Span 筛选" : "展开 Span 筛选";
-  button.setAttribute("aria-label", label);
-  button.title = label;
-});
+const narrowLayout = window.matchMedia("(max-width: 760px)");
+function setSidebarExpanded(expanded) {
+  $("sidebar-toggle").setAttribute("aria-expanded", String(expanded));
+  $("sidebar-filters").hidden = !expanded;
+  scheduleAutoLoadCheck();
+}
+setSidebarExpanded(!narrowLayout.matches);
+$("sidebar-toggle").addEventListener("click", () => setSidebarExpanded($("sidebar-filters").hidden));
 // 带清除图标的字段:有值时显示图标,点击清空并聚焦。
 // select 用 change 事件;文本输入用 input 事件,随输入实时显隐。
 const clearSyncers = [];
@@ -250,7 +241,7 @@ document.addEventListener("compositionend", (e) => {
 // 输入法组合输入期间的回车仅确认候选字,不触发查询。
 // 仅响应 INPUT(按钮/选项卡走原生激活,避免重复触发)。
 document.addEventListener("keydown", (e) => {
-  if (shouldSubmitInputEnter(e, inputComposing || inputCompositionJustEnded)) search();
+  if (shouldSubmitInputEnter(e, inputComposing || inputCompositionJustEnded)) search({ submitted: true });
 });
 
 function activeTabValue(id) {
@@ -276,7 +267,7 @@ function currentShareState() {
     env: activeTabValue("env-tabs"),
     app: $("app-select").value,
     levels,
-    direction: activeTabValue("direction-tabs") || "BACKWARD",
+    direction: $("direction").value,
     keyword: $("keyword").value.trim(),
     traceId: $("trace-id").value.trim(),
  spanId: $("span-id").value.trim(),
@@ -301,7 +292,7 @@ function applyShareState(state) {
   $("message-id").value = state.messageId || "";
   refreshNamespaceEnvs(state.env);
   setActiveLevels(state.levels || []);
-  if (state.direction) setActiveTabValue("direction-tabs", state.direction);
+  if (state.direction) $("direction").value = state.direction === "FORWARD" ? "FORWARD" : "BACKWARD";
 }
 
 function setSelectValue(sel, value) {
@@ -357,9 +348,12 @@ async function search(options) {
   const start = toUnix($("start").value);
   const end = toUnix($("end").value);
   if (!start || !end) { showError("请选择时间范围"); return; }
-  const direction = activeTabValue("direction-tabs") || "BACKWARD";
-  const { namespace, spanId, parentSpanId, taskId, messageId } = currentShareState();
+  const { namespace, direction, spanId, parentSpanId, taskId, messageId } = currentShareState();
  const payload = { namespace, env, app, levels, keyword, traceId, spanId, parentSpanId, taskId, messageId, start, end, direction, ...(requestedLimit ? {limit: requestedLimit} : {}) };
+  if (options?.submitted && narrowLayout.matches && !$("sidebar-filters").hidden) {
+    setSidebarExpanded(false);
+    $("sidebar-toggle").focus();
+  }
   lastQueryPayload = payload;
   try {
     const j = await apiJSON("/api/query_range", payload);
