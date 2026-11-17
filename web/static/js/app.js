@@ -312,7 +312,7 @@ function setAppPickerOpen(open) {
   if (open) {
     appFilter.value = "";
     renderAppOptions();
-    appFilter.focus();
+    appFilter.focus({ preventScroll: true });
   }
 }
 

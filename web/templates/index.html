@@ -77,9 +77,13 @@
                 </button>
               </div>
               <div class="app-panel" id="app-panel" hidden inert>
-                <input type="search" id="app-filter" aria-label="筛选应用" placeholder="搜索应用名或仓库" autocomplete="off">
-                <div class="app-options" id="app-options" role="group" aria-label="应用选项"></div>
-                <p id="app-empty" class="app-empty" role="status" hidden>没有匹配的应用</p>
+                <div class="app-panel-clip">
+                  <div class="app-panel-content">
+                    <input type="search" id="app-filter" aria-label="筛选应用" placeholder="搜索应用名或仓库" autocomplete="off">
+                    <div class="app-options" id="app-options" role="group" aria-label="应用选项"></div>
+                    <p id="app-empty" class="app-empty" role="status" hidden>没有匹配的应用</p>
+                  </div>
+                </div>
               </div>
               <select id="app-select" hidden>
                 <option value="">不限</option>

@@ -197,7 +197,6 @@ button:hover { background: #416bd1; }
   --app-selected: #263d64;
   --app-accent: #81a7ff;
   display: grid;
-  gap: 4px;
   min-width: 0;
 }
 body.light-theme .app-picker {
@@ -208,7 +207,7 @@ body.light-theme .app-picker {
   --app-selected: #e2ecff;
   --app-accent: #416bd1;
 }
-.app-picker .lbl { color: var(--app-muted); }
+.app-picker .lbl { color: var(--app-muted); margin-bottom: 4px; }
 .app-toggle {
   flex: 1;
   min-width: 0;
@@ -229,7 +228,7 @@ body.light-theme .app-picker {
 #app-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .app-trigger:has(#app-clear:not([hidden])) #app-value { margin-inline-end: 24px; }
 .app-trigger .clear-icon { right: 24px; }
-.app-panel { display: grid; gap: 6px; padding: 6px; border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-surface); }
+.app-panel-content { display: grid; gap: 6px; margin-top: 4px; padding: 6px; border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-surface); }
 .app-panel[hidden], .app-options:empty { display: none; }
 .app-options { max-height: 13rem; overflow-y: auto; }
 .app-option {
@@ -511,17 +510,24 @@ body.light-theme .settings[open] > summary { background: #e7edf6; color: #416bd1
   .sidebar-filters:not([hidden]) { animation: sidebar-in var(--motion-panel) var(--motion-ease); }
   .query-loading:not([hidden]) .query-loading-card { animation: raise-in var(--motion-panel) var(--motion-ease); }
 
-  .app-panel, .query-loading, .mcp-settings {
+  .app-panel {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows var(--motion-panel) var(--motion-ease), opacity var(--motion-panel) var(--motion-ease);
+  }
+  .app-panel[hidden] { display: grid; grid-template-rows: 0fr; opacity: 0; pointer-events: none; }
+  .app-panel-clip { min-height: 0; overflow: hidden; }
+
+  .query-loading, .mcp-settings {
     transition-property: opacity, transform, display;
     transition-duration: var(--motion-panel);
     transition-timing-function: var(--motion-ease);
     transition-behavior: allow-discrete;
   }
-  .app-panel[hidden], .query-loading[hidden], .mcp-settings:not([open]) {
+  .query-loading[hidden], .mcp-settings:not([open]) {
     opacity: 0;
     pointer-events: none;
   }
-  .app-panel[hidden] { transform: translateY(-6px); }
   .mcp-settings { transition-property: opacity, transform, display, overlay; }
   .mcp-settings:not([open]) { transform: translateY(8px) scale(.985); }
   .mcp-settings::backdrop {
@@ -533,8 +539,7 @@ body.light-theme .settings[open] > summary { background: #e7edf6; color: #416bd1
   .mcp-settings:not([open])::backdrop { background-color: transparent; pointer-events: none; }
 
   @starting-style {
-    .app-panel:not([hidden]), .query-loading:not([hidden]), .mcp-settings[open] { opacity: 0; }
-    .app-panel:not([hidden]) { transform: translateY(-6px); }
+    .query-loading:not([hidden]), .mcp-settings[open] { opacity: 0; }
     .mcp-settings[open] { transform: translateY(8px) scale(.985); }
     .mcp-settings[open]::backdrop { background-color: transparent; }
   }
